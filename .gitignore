@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+
+# Verifier output written by a local run (the runner's default --artifacts-dir)
+artifacts/
+
+# Session notes and audit runs (AGENTS.md)
+.agent/local/
+.audit/local/
+
+# Environment
+.env
+.env.*
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
