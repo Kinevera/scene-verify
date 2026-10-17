@@ -192,10 +192,10 @@ stage. Content binding (verdict `usd_sha256` ↔ packaged artifact checksum) is 
 ## 6. Reproduce
 
 ```bash
-# reconstruction driver (per scene): /sdb-disk/work/natural_corpus/run_recon.sh <scene> <start> <dur>
+# reconstruction driver (per scene): <work-dir>/natural_corpus/run_recon.sh <scene> <start> <dur>
 # grade one bundle in Isaac:
 /opt/isaac-sim/python.sh scripts/tools/verify_usd_bundle.py \
-    --bundle /sdb-disk/work/natural_corpus/<scene>/bundle.json --emit-sidecar
+    --bundle <work-dir>/natural_corpus/<scene>/bundle.json --emit-sidecar
 # results table:
 venv/bin/python scripts/tools/natural_corpus_table.py --scene-glob 'recon_wh_*' \
     --recon-failed "wh_staging_aisle:SfM registered 4/55 frames; ..."

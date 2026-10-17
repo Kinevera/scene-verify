@@ -65,7 +65,7 @@ Crux test: a static object mistagged **and** drifting 10 cm/45° trips
 ## Live Phase-0 verdict — `pack_1_i2` (Isaac Sim 5.1, A5000)
 
 Run: `/opt/isaac-sim/python.sh scripts/tools/verify_scene_bundle.py --instance-id pack_1_i2
---storage-root /sdb-disk/work/backend/storage`. Verdict in
+--storage-root <work-dir>/backend/storage`. Verdict in
 `artifacts/scene_verify/pack_1_i2/`.
 
 Final verdict after the build-fidelity and mesh-proxy fixes — **overall = pass**:
