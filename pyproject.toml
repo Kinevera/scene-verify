@@ -22,9 +22,6 @@ dev = [
   # The tests open real USD stages; Isaac Sim provides pxr at runtime instead.
   "usd-core~=25.11",
   "types-PyYAML~=6.0",
-  # trimesh needs scipy for convex hulls and winding repair; Isaac Sim 5.1's Python bundles
-  # it (1.15.3), and the tests that grade the convex-hull proxy and winding need it here.
-  "scipy>=1.15",
 ]
 
 [tool.uv.sources]

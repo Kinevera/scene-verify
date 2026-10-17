@@ -10,7 +10,9 @@ one version:
 - **The engine**, `packages/engine`: distribution `scene-verify`, import `scene_verify`. The
   geometry and Isaac Sim checks that grade a USD scene and write a verdict, and the generic runner
   `scene_verify.runners.usd_bundle`. It depends on the contract at the same version and on numpy,
-  trimesh and PyYAML; `pxr`, `isaacsim`, `omni` and `carb` come from the Isaac Sim runtime.
+  trimesh (below 5, the major version its numbers were evidenced on), PyYAML and scipy (which
+  trimesh needs for the convex-hull collision proxy); `pxr`, `isaacsim`, `omni` and `carb` come
+  from the Isaac Sim runtime.
 
 SceneForge's API pins the contract only; SceneForge's verify stage worker and RoboEval's
 PackingBench pin the engine (scene-verify-0001, SceneForge sceneforge-0009). The code moved here

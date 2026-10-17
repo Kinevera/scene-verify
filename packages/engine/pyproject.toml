@@ -5,14 +5,18 @@ description = "The scene verifier engine: grades a USD scene's geometry and phys
 requires-python = ">=3.11"
 license = { text = "Proprietary" }
 authors = [{ name = "Cybernetic" }]
-# Lower bounds only, so the engine installs into Isaac Sim 5.1's Python, which bundles numpy
-# 1.26.0, trimesh 4.5.1 and PyYAML 6.0.2. pxr, isaacsim, omni and carb come from the runtime
-# the engine runs in and are not declared.
+# Lower bounds that Isaac Sim 5.1's Python meets (it bundles numpy 1.26.0, trimesh 4.5.1,
+# PyYAML 6.0.2 and scipy 1.15.3). trimesh needs scipy for the convex-hull collision proxy and
+# winding repair; without it the proxy silently falls back to the visual mesh, so scipy is
+# declared. trimesh stays below 5 because the verifier's numbers were evidenced on 4.5 and 4.12
+# only; lifting the cap needs a run showing the verdicts unchanged (scene-verify-0001, Q7).
+# pxr, isaacsim, omni and carb come from the runtime the engine runs in and are not declared.
 dependencies = [
   "scene-verify-contract==0.3.0",
   "numpy>=1.26",
-  "trimesh>=4.5",
+  "trimesh>=4.5,<5",
   "PyYAML>=6.0",
+  "scipy>=1.10",
 ]
 
 [tool.uv.sources]
