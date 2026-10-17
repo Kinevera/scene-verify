@@ -1,0 +1,138 @@
+# scene-verify-0001: The verifier moves from RoboEval as a contract and an engine released under one tag
+
+- **Status:** Accepted
+- **Date:** 2026-10-17
+- **Scope:** What moves from RoboEval into this repository, how it is packaged, versioned and
+  pinned, how its history moves, and how the repository is set up and receives changes
+
+## Context
+
+SceneForge ADR sceneforge-0009 (2026-10-13) puts the scene verifier in its own Cybernetic-EAI
+repository as one versioned package with two parts: the `scene_verify/1` contract (the verdict
+schema and its validation, with no Isaac dependency) and the engine (the geometry and Isaac Sim
+checks that produce a verdict). SceneForge's API pins the contract only; SceneForge's verify stage
+worker (SceneForge #28 and #78) and RoboEval's PackingBench pin the engine. SceneForge issue #87
+asks for the repository, the move of RoboEval's verifier work with its history where practical,
+the two parts released at a version, and both consumers pinned.
+
+The verifier exists only on RoboEval's unmerged `feat/scene-verify-fidelity` branch: 26 commits
+by Neil Tripathi from 2026-06-22 to 2026-07-06, ending at ffda3a96, built on RoboEval `dev`
+(merge base 3a9a3146, 2026-06-08) and 317 commits behind it on 2026-10-17. On that branch:
+
+- `app/scene_verify/` is self-contained: `core.py` and `bundle.py` import only the standard
+  library (PyYAML inside one function), `geometry.py` imports numpy and trimesh and `pxr` inside
+  functions, and `defects.py` imports `pxr` inside functions. `core.py` holds both the verdict
+  schema (`SCHEMA_VERSION = "scene_verify/1"`, `SceneVerifyReport.to_verdict_json()`) and the
+  grading logic; no validator for a received verdict exists.
+- The generic Isaac Sim runner `scripts/tools/verify_usd_bundle.py` imports
+  `capture_scene_evidence` from the PackingBench-bound `scripts/tools/verify_scene_bundle.py`,
+  which imports `aabb_overlap_xyz` from PackingBench's `runtime_contact.py` and pose helpers from
+  RoboEval's `app/scene/object_physics.py`. The runners target Isaac Sim 5.1
+  (`isaacsim==5.1.0.0` in RoboEval's worker requirements).
+- There is no `pyproject.toml`; the code runs as part of RoboEval's backend app. The tests mock
+  Isaac Sim modules and use a real `pxr`; no test needs a GPU. The branch also carries corpus
+  outputs under `artifacts/`, one of them a 9.3 MB USD file.
+
+SceneForge's API reads `scene_verify/1` verdicts with its own hand-written checks
+(`_build_scene_verify_check`) and carries no copy of the schema. No `Cybernetic-EAI/scene-verify`
+repository existed before 2026-10-17.
+
+## Decision
+
+The maintainer ruled six questions through the question prompt on 2026-10-17, between about
+13:35 and 14:00 local time (UTC+4), each as recommended, and asked for the repository to
+be created and the code moved.
+
+1. **The repository is `Cybernetic-EAI/scene-verify` (Q1).** The repository, the engine's
+   distribution and its import package share the contract's name.
+2. **It is private (Q2).** A consumer that pins it (SceneForge's CI and images, RoboEval) needs a
+   read credential, such as a read-only deploy key or a fine-grained token stored as that
+   consumer's repository secret, each added with the maintainer's approval when the pin lands.
+   Until SceneForge pins the contract, its own checks stand in for it (sceneforge-0009).
+3. **The engine and the generic runner move; PackingBench's code stays (Q3).** This repository
+   takes `app/scene_verify/` (core, bundle, defects, geometry, `thresholds.yaml`), the generic
+   runner `verify_usd_bundle.py` with `capture_scene_evidence` moved into the engine, the RoboEval
+   helpers they import copied in as engine code (`aabb_overlap_xyz`, and the pose read and
+   dynamic-physics setup from `object_physics.py`), the verifier's own tests with small fixtures,
+   and the `scene_verify` docs. RoboEval keeps PackingBench's adapter and scene builder, the
+   PackingBench-bound runner, the corpus scripts and `artifacts/`. The engine imports nothing
+   from RoboEval.
+4. **Two distributions in one uv workspace, released under one tag (Q4).**
+   `scene-verify-contract` (import `scene_verify_contract`) holds the `scene_verify/1` verdict
+   types, constants and a validator extracted from `core.py`, with no dependency outside the
+   standard library. `scene-verify` (import `scene_verify`) is the engine: it depends on the
+   contract at the same version and on numpy, trimesh and PyYAML, and takes `pxr` and `isaacsim`
+   from the runtime it runs in. Both require Python 3.11 or later. Both ship under one annotated
+   tag with a GitHub release, the first being v0.3.0, and the engine's `VERIFIER_VERSION` follows
+   the tag. A consumer pins the tag as a git dependency with a subdirectory, so SceneForge's lock
+   holds the contract only.
+5. **One import commit with provenance (Q5).** The first commit of the moved code holds the files
+   as they stand at RoboEval ffda3a96, at their RoboEval paths. It names the source repository,
+   branch and SHA, lists each file's source path, and credits Neil Tripathi as co-author. The
+   restructuring follows as separate commits, so a diff shows every change from RoboEval's code.
+   The branch's 26 commits stay in RoboEval as the full history.
+6. **The org standard, with the code landing by a reviewed PR (Q6).** Default branch `dev`,
+   merge commits only, head branches deleted on merge. A one-file README commit seeded `main`
+   and `dev`, the only direct push. Everything else arrives as a topic-branch PR into `dev`:
+   `AGENTS.md` and a `CLAUDE.md` pointer, the import and restructuring commits, `make` targets,
+   CI, the commit-message and pre-push hooks with `scripts/setup-dev.sh`, and this record. It gets
+   one review round (primary, blind peer, final diff) and merges on the maintainer's approval
+   naming the PR; a promotion PR then takes `dev` to `main`, where v0.3.0 is tagged.
+7. **The engine declares scipy and keeps trimesh below 5 (Q7, ruled at about 15:15 local, as
+   recommended).** trimesh needs scipy to build the convex-hull collision proxy and to repair
+   winding; without it the proxy silently falls back to the visual mesh, so a convexHull asset
+   can pass when it should fail. The engine therefore declares `scipy>=1.10` (Isaac Sim 5.1
+   bundles 1.15.3). The verifier's numbers were evidenced on trimesh 4.5 and 4.12 only, so the
+   engine requires `trimesh>=4.5,<5`; lifting the cap needs a run that shows the verdicts
+   unchanged.
+
+Adopted as detail, not asked: the runner moves as it is, written against Isaac Sim 5.1 and not
+run on 6.2. SceneForge's sceneforge-0021 (item 2) requires the engine to be checked on Isaac Sim
+6.2 under SceneForge #87 or #28 before it runs there; that check needs SceneForge's Isaac Sim
+worker image (#78), so it falls to #28.
+
+## Consequences
+
+- SceneForge and RoboEval adopt a verifier change by moving their pin; a change to the verdict
+  shape or to the validator's rules is a contract change that SceneForge sees as a version bump
+  in its lock.
+- Pinning needs a read credential in every consumer's CI and image builds, because the repository
+  is private.
+- RoboEval's branch keeps its own copy until RoboEval pins the engine and keeps only its adapter
+  (SceneForge #87's third item); until then the two copies can drift.
+- The copied RoboEval helpers are now maintained here, apart from RoboEval's originals.
+- The validator is new code: before this repository, nothing validated a verdict on receipt
+  except SceneForge's own checks, which stay in SceneForge whatever the validator does
+  (sceneforge-0009).
+- The engine's runner is unproven on Isaac Sim 6.2, the version SceneForge's worker image runs
+  (sceneforge-0021).
+- A new repository brings its own CI, hooks and review: the same workflow as SceneForge, applied
+  to a small codebase.
+
+## Alternatives considered
+
+- **Name it `scene-verifier` or `SceneVerify`:** names the thing rather than the contract, or
+  matches the product repositories' casing; either splits the repository name from the import
+  package.
+- **Public:** pins need no credential, but the verifier's code, thresholds and fixtures would be
+  published, and turning it private later breaks every pin. **Private now, contract public
+  later:** defers the credential question at the cost of a likely second move.
+- **Move the library only:** smaller, but the engine would have no Isaac Sim runner and #28 would
+  write one. **Move everything on the branch:** the engine would import PackingBench code and the
+  repository would carry the corpus outputs.
+- **One distribution with an `[engine]` extra:** one thing to release, but SceneForge's lock
+  would carry the engine's code. **Wheels attached to releases:** byte-exact pins, but a release
+  job to build and maintain now, and a private repository's asset URLs still need a credential.
+- **Filtered history with git-filter-repo:** keeps blame and authorship, at the cost of more
+  steps and early commits under PackingBench-era paths, with three of the 26 commits also
+  touching PackingBench files.
+- **Minimal now, standard later:** a pinnable tag sooner, but an unreviewed first release.
+  **Tag from `dev`:** one PR fewer before the first pin, with the release tag on the integration
+  branch.
+
+## Revisit trigger
+
+- A consumer cannot obtain a read credential for a private repository, which reopens Q2.
+- RoboEval pins the engine and removes its copy, or decides not to.
+- The runner fails on Isaac Sim 6.2 in SceneForge #28.
+- A third consumer needs the engine without numpy, trimesh or PyYAML.
