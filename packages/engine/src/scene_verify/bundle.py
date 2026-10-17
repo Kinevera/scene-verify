@@ -13,7 +13,7 @@ ad-hoc USD author, a different benchmark) describes a scene declaratively:
 
 The module is **Isaac-free on purpose** (no ``pxr`` / ``trimesh`` / Isaac imports) so the
 contract and its validation are unit-testable in the plain project venv. The Isaac runner
-(``scripts/tools/verify_usd_bundle.py``) consumes a ``SceneBundle`` and turns it into the
+(``scene_verify.runners.usd_bundle``) consumes a ``SceneBundle`` and turns it into the
 same ``CapturedSceneEvidence`` the PackingBench worker produces — so both paths are graded
 by one engine, with no per-consumer scoring drift.
 """

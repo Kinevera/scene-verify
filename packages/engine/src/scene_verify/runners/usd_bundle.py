@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
 """Generic USD scene-bundle verifier — emits ``scene_verify/1`` for *any* USD scene.
 
-This is the embodiment-agnostic counterpart to ``verify_scene_bundle.py`` (which is bound
-to a PackingBench manifest row). It takes a declarative ``SceneBundle`` JSON — a USD path
-plus the prims to grade — opens that USD on a physics-enabled ``World``, runs the *same*
+This is the embodiment-agnostic counterpart to RoboEval's ``verify_scene_bundle.py`` (which
+is bound to a PackingBench manifest row). It takes a declarative ``SceneBundle`` JSON — a USD
+path plus the prims to grade — opens that USD on a physics-enabled ``World``, runs the *same*
 passive settle and evidence capture (``capture_scene_evidence``, shared with the
 PackingBench worker), and scores it with the Isaac-free engine. One engine, one capture,
 two producers: a PackingBench eval and an arbitrary author (e.g. a SceneForge approved
@@ -14,10 +13,14 @@ made into dynamic rigid bodies so the settle gate is meaningful, but the support
 read from the USD as authored — a scene whose table lacks a collider will (correctly) trip
 ``fall_through`` rather than be silently floored. No gate is faked to pass.
 
-Usage (host Isaac python):
-    /opt/isaac-sim/python.sh scripts/tools/verify_usd_bundle.py \
+Usage (Isaac Sim's Python, with this package installed into it):
+    <isaac-sim>/python.sh -m scene_verify.runners.usd_bundle \
         --bundle path/to/scene_bundle.json \
-        --artifacts-dir /sdb-disk/work/backend-scene-verify/artifacts --emit-sidecar
+        --artifacts-dir path/to/artifacts --emit-sidecar
+
+A relative ``usd_stage_path`` in the bundle, and the default ``--artifacts-dir``
+(``artifacts``), resolve against the working directory. In RoboEval they resolved against the
+backend root, the directory the runner was documented to run from.
 
 The ``--emit-sidecar`` flag also writes ``scene_verify.json`` beside the bundle's USD —
 exactly the artifact a SceneForge packaging worker promotes into its QA report so the
@@ -33,23 +36,19 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-BACKEND_ROOT = Path(__file__).resolve().parents[2]
-for _p in (str(BACKEND_ROOT), str(BACKEND_ROOT / "scripts" / "tools")):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Verify an arbitrary USD scene bundle with scene_verify"
     )
     parser.add_argument(
-        "--bundle", required=True, help="Path to a SceneBundle JSON (see app/scene_verify/bundle.py)."
+        "--bundle", required=True, help="Path to a SceneBundle JSON (see scene_verify/bundle.py)."
     )
     parser.add_argument(
         "--artifacts-dir",
-        default=str(BACKEND_ROOT / "artifacts"),
-        help="Durable artifacts root (verdicts under <dir>/scene_verify/<scene_id>).",
+        default="artifacts",
+        help="Durable artifacts root (verdicts under <dir>/scene_verify/<scene_id>); "
+        "default: artifacts in the working directory.",
     )
     parser.add_argument("--thresholds", default=None)
     parser.add_argument("--settle-steps", type=int, default=None)
@@ -65,7 +64,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def _resolve_usd_path(usd_stage_path: str) -> str:
     path = Path(usd_stage_path)
     if not path.is_absolute():
-        path = (BACKEND_ROOT / path).resolve()
+        path = (Path.cwd() / path).resolve()
     return str(path)
 
 
@@ -83,7 +82,7 @@ def build_generic_scene(*, bundle, usd_path: str, config):
     from isaacsim.core.api import World
     from pxr import UsdGeom, UsdPhysics
 
-    from app.scene.object_physics import apply_dynamic_object_physics
+    from scene_verify.object_physics import apply_dynamic_object_physics
 
     settings = carb.settings.get_settings()
     settings.set("/physics/updateToUsd", True)
@@ -153,10 +152,9 @@ def build_generic_scene(*, bundle, usd_path: str, config):
 
 
 def run(args: argparse.Namespace) -> int:
-    from app.scene_verify import core as sv
-    from app.scene_verify.bundle import SceneBundle
-
-    from verify_scene_bundle import capture_scene_evidence
+    from scene_verify import core as sv
+    from scene_verify.bundle import SceneBundle
+    from scene_verify.capture import capture_scene_evidence
 
     bundle = SceneBundle.from_json_file(args.bundle)
     config = sv.load_verify_thresholds(args.thresholds)
@@ -208,7 +206,7 @@ def run(args: argparse.Namespace) -> int:
     if isinstance(recon_decl, dict):
         import dataclasses
 
-        from app.scene_verify import geometry as geom
+        from scene_verify import geometry as geom
 
         try:
             measured = geom.reconstruction_mesh_stats(

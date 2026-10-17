@@ -6,7 +6,7 @@ worker) and read the generic ``scene_verify/1`` verdict. Consumer-specific proje
 live in that consumer's code, never here.
 """
 
-from app.scene_verify.core import (
+from scene_verify.core import (
     SCHEMA_VERSION,
     VERIFIER_VERSION,
     Bucket,

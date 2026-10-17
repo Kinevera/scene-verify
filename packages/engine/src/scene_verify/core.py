@@ -10,8 +10,8 @@ USD/Isaac adapter) and emits a verdict; it has no dependency on PackingBench, Sc
 or any particular benchmark. It deliberately imports neither ``trimesh``/``pxr`` nor any
 Isaac runtime at module top-level, so the whole decision layer is unit-testable in a plain
 venv. Heavy geometry extraction lives in ``scene_verify.geometry``; the Isaac stage
-load/step lives in each consumer's adapter (e.g. PackingBench's
-``scripts/tools/verify_scene_bundle.py``).
+load/step lives in ``scene_verify.capture`` and the runners that call it (the engine's
+``scene_verify.runners.usd_bundle``, PackingBench's runner in RoboEval).
 
 The report serialises to :meth:`SceneVerifyReport.to_verdict_json` — the stable
 ``scene_verify/1`` verdict that consumers (a SceneForge QA gate, a PackingBench eval)

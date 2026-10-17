@@ -1,227 +1,17 @@
-#!/usr/bin/env python3
-"""Host Isaac runner for the PackingBench scene verifier.
+"""Settle a built Isaac Sim scene and capture the evidence the engine grades.
 
-Generalises the host scene validator into a geometry/physics *verifier*: it builds a real
-scene (reusing ``build_host_validation_scene`` and the shared object-physics helpers),
-runs a passive settle, captures evidence, and scores it with the Isaac-free
-``scene_verify`` decision layer — emitting the stable ``scene_verify/1`` verdict.
+``capture_scene_evidence`` moved here from RoboEval's PackingBench runner
+``scripts/tools/verify_scene_bundle.py`` (ffda3a96), where the generic runner imported it.
+The engine's runner (``scene_verify.runners.usd_bundle``) and PackingBench's runner both call
+it, so every producer grades scenes through one capture implementation. PackingBench's scene
+build, soundness injectors and CLI stay in RoboEval (scene-verify-0001).
 
-It builds the scene through the **shared** ``host_scene_runtime.build_packingbench_scene``
-— the same faithful build the host validator uses (robot + fixed-base joint included) — so
-the physics scene the verifier grades is the one the benchmark actually runs. Cameras are
-the only validator step skipped (not physics-relevant). An earlier robot-free shortcut let
-a rigid-lock item fall through the table; sharing the build removed that divergence.
-
-All Isaac/app imports are lazy (inside functions) so that:
-* importing this module does NOT boot a ``SimulationApp`` (the soundness runner imports
-  ``build_and_capture`` after booting its own app), and
-* the validator script is never imported (it boots an app at import time).
-
-Usage (host Isaac python):
-    /opt/isaac-sim/python.sh scripts/tools/verify_scene_bundle.py \
-        --instance-id pack_1_i2 --storage-root /sdb-disk/work/backend \
-        --artifacts-dir /sdb-disk/work/backend-scene-verify/artifacts
+Its Isaac Sim imports stay inside the function, so importing this module boots nothing.
 """
 
 from __future__ import annotations
 
-import argparse
-import json
 import math
-import os
-import sys
-from datetime import datetime, timezone
-from pathlib import Path
-
-BACKEND_ROOT = Path(__file__).resolve().parents[2]
-if str(BACKEND_ROOT) not in sys.path:
-    sys.path.insert(0, str(BACKEND_ROOT))
-
-#: Physics modes whose objects are expected to stay static (graded by metadata, not settle).
-STATIC_PHYSICS_MODES = {
-    "artvip_carton_base_kinematic",
-    "preserve_authored_articulation",
-}
-
-#: Soundness defects and the gate each must flip. Used by ``--inject`` so the live soundness
-#: harness can run one defect per *fresh* Isaac process (Isaac hard-aborts on a 2nd scene
-#: build in one process), aggregated by run_scene_verify_soundness.py.
-SOUNDNESS_EXPECTED_GATE = {
-    "oversize_collision_hull": "visual_collision_agreement",
-    "undersize_collision_hull": "visual_collision_agreement",
-    "missing_static_tag": "static_metadata_present",
-    "interpenetration": "interpenetration",
-    "fall_through": "fall_through",
-}
-
-
-def _soundness_injector(defect: str, config):
-    """Return an ``(stage, objects_meta, config) -> info`` closure for one defect.
-
-    Each closure mutates the freshly-built stage before ``world.reset()`` (the inject point
-    in ``build_and_capture``). A closure may return ``{"skipped": reason, ...}`` when the
-    scene lacks the geometry the defect needs (e.g. no separately-authored collision mesh).
-    """
-    from app.scene_verify import defects
-    from app.scene_verify import geometry as geom
-
-    def _first_dynamic(metas):
-        return next((m for m in metas if not m["is_static_expected"]), None)
-
-    def _first_static(metas):
-        return next((m for m in metas if m["is_static_expected"]), None)
-
-    def _skip(reason):
-        return {"skipped": reason, "expected_gate": SOUNDNESS_EXPECTED_GATE[defect]}
-
-    def oversize(stage, metas, _cfg):
-        item = _first_dynamic(metas)
-        if item is None:
-            return _skip("no dynamic object")
-        prims = geom.collision_mesh_prim_paths(stage, item["prim_path"])
-        if not prims:
-            return _skip("no authored collision mesh")
-        return defects.inject_oversize_collision_hull(stage, prims[0], factor=config.defect_oversize_factor)
-
-    def undersize(stage, metas, _cfg):
-        item = _first_dynamic(metas)
-        if item is None:
-            return _skip("no dynamic object")
-        prims = geom.collision_mesh_prim_paths(stage, item["prim_path"])
-        if not prims:
-            return _skip("no authored collision mesh")
-        return defects.inject_undersize_collision_hull(stage, prims[0], factor=config.defect_undersize_factor)
-
-    def missing_static(stage, metas, _cfg):
-        target = _first_static(metas) or _first_dynamic(metas)
-        if target is None:
-            return _skip("no object")
-        return defects.inject_missing_static_tag(stage, target["prim_path"])
-
-    def interpenetration(stage, metas, _cfg):
-        dynamic = [m for m in metas if not m["is_static_expected"]]
-        if len(dynamic) < 2:
-            return _skip("needs >=2 dynamic objects")
-        item, partner = dynamic[0], dynamic[1]
-        item_pos = item.get("position") or [0.0, 0.0, 0.0]
-        partner_pos = partner.get("position") or item_pos
-        translate = [float(partner_pos[k]) - float(item_pos[k]) for k in range(3)]
-        return defects.inject_interpenetration(stage, item["prim_path"], translate_xyz=translate)
-
-    def fall_through(stage, metas, _cfg):
-        item = _first_dynamic(metas)
-        if item is None:
-            return _skip("no dynamic object")
-        return defects.inject_fall_through(stage, item["prim_path"])
-
-    return {
-        "oversize_collision_hull": oversize,
-        "undersize_collision_hull": undersize,
-        "missing_static_tag": missing_static,
-        "interpenetration": interpenetration,
-        "fall_through": fall_through,
-    }[defect]
-
-
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Verify a PackingBench scene with scene_verify")
-    parser.add_argument("--instance-id", default="pack_1_i2")
-    parser.add_argument("--robot", default="yam")
-    parser.add_argument(
-        "--storage-root",
-        default=str(BACKEND_ROOT),
-        help="Dir containing objects/backgrounds/robots/scenes (default: backend root).",
-    )
-    parser.add_argument("--robot-dir", default=None)
-    parser.add_argument(
-        "--artifacts-dir",
-        default=str(BACKEND_ROOT / "artifacts"),
-        help="Durable artifacts root (verdicts written under <dir>/scene_verify/<id>).",
-    )
-    parser.add_argument("--thresholds", default=None)
-    parser.add_argument("--settle-steps", type=int, default=None)
-    parser.add_argument(
-        "--inject",
-        default=None,
-        choices=sorted(SOUNDNESS_EXPECTED_GATE),
-        help="Inject one soundness defect before reset (live soundness harness; one defect "
-        "per fresh Isaac process). Artifacts go under scene_verify/<id>__soundness__<defect>.",
-    )
-    return parser.parse_args(argv)
-
-
-def build_and_capture(
-    *,
-    instance_id: str,
-    robot: str,
-    storage_root: Path,
-    robot_dir: Path | None,
-    config,
-    inject=None,
-    inject_target: str | None = None,
-):
-    """Build a fresh scene (optionally inject a defect), settle, and capture evidence.
-
-    Requires a booted ``SimulationApp``. Returns ``(captured, objects_meta)``. ``inject`` is
-    a callable ``(stage, objects_meta, config) -> dict`` used by the soundness harness.
-    """
-    from app.benchmarks.packingbench.host_scene_runtime import build_packingbench_scene
-
-    robot_dir = robot_dir or (storage_root / "robots" / robot)
-
-    def _meta(obj: dict) -> dict:
-        return {
-            "object_id": obj["name"],
-            "prim_path": obj["prim_path"],
-            "pose_prim_path": obj["pose_prim_path"],
-            "pose_center_offset_xyz_m": obj["pose_center_offset_xyz_m"],
-            "position": obj["position"],
-            "physics_mode": obj["physics_mode"],
-            "is_static_expected": obj["physics_mode"] in STATIC_PHYSICS_MODES,
-        }
-
-    injected = {"info": None}
-
-    def _pre_reset(stage, objects) -> set:
-        # Inject a defect on the built stage before world.reset() (the only point where stage
-        # mutations take physics effect). Return the injected object's name so its pose target
-        # is not re-pinned (a translate defect would otherwise be teleported back to spawn).
-        if inject is None:
-            return set()
-        info = inject(stage, [_meta(o) for o in objects], config)
-        injected["info"] = info
-        print(f"[verify] injected: {info}", flush=True)
-        if not (info and info.get("target_prim_path")):
-            return set()
-        return {o["name"] for o in objects if o["prim_path"] == info["target_prim_path"]}
-
-    # Faithful shared build (robot + objects + reset + pose restore), identical to the host
-    # validator's — so the physics scene the verifier grades is the one the benchmark uses.
-    # The robot-free shortcut this replaces let a rigid-lock item fall through the table.
-    built = build_packingbench_scene(
-        instance_id=instance_id,
-        robot=robot,
-        storage_root=storage_root,
-        robot_dir=robot_dir,
-        pre_reset_hook=_pre_reset,
-    )
-    stage = built.stage
-    world = built.world
-    support_prim_path = built.support_prim_path
-    objects_meta = [_meta(o) for o in built.objects]
-    print(
-        f"[verify] faithful build: {len(objects_meta)} objects, support={support_prim_path}",
-        flush=True,
-    )
-
-    return capture_scene_evidence(
-        stage=stage,
-        world=world,
-        objects_meta=objects_meta,
-        support_prim_path=support_prim_path,
-        config=config,
-        injected_info=injected["info"],
-    )
 
 
 def capture_scene_evidence(
@@ -235,9 +25,9 @@ def capture_scene_evidence(
 ):
     """Settle a built scene and capture all evidence the engine grades.
 
-    Shared by the PackingBench worker (``build_and_capture``) and the generic
-    ``verify_usd_bundle`` runner, so both grade scenes through one capture implementation
-    with no per-consumer drift. ``objects_meta`` rows carry: ``object_id``, ``prim_path``,
+    Shared by the PackingBench worker (``build_and_capture`` in RoboEval) and the generic
+    ``scene_verify.runners.usd_bundle`` runner, so both grade scenes through one capture
+    implementation with no per-consumer drift. ``objects_meta`` rows carry: ``object_id``, ``prim_path``,
     ``pose_prim_path``, ``pose_center_offset_xyz_m``, ``position``, ``physics_mode``,
     ``is_static_expected``. Requires a booted ``SimulationApp`` and a ``world`` already
     bound to ``stage`` (poses are captured before/after a passive ``config.settle_steps``
@@ -245,10 +35,10 @@ def capture_scene_evidence(
     """
     from pxr import UsdGeom
 
-    from app.benchmarks.packingbench.runtime_contact import aabb_overlap_xyz
-    from app.scene.object_physics import get_dynamic_object_pose
-    from app.scene_verify import core as sv
-    from app.scene_verify import geometry as geom
+    from scene_verify import core as sv
+    from scene_verify import geometry as geom
+    from scene_verify.object_physics import get_dynamic_object_pose
+    from scene_verify.runtime_contact import aabb_overlap_xyz
 
     # The engine's thresholds are all in metres. A USD stage may be authored in any unit
     # (PackingBench scenes are metres = 1.0; the Pixar Kitchen Set is centimetres = 0.01).
@@ -425,72 +215,3 @@ def capture_scene_evidence(
         pairwise_overlaps_pre_settle=tuple(overlaps_pre_settle),
     )
     return captured, objects_meta
-
-
-def run(args: argparse.Namespace) -> int:
-    from app.scene_verify import core as sv
-    from app.benchmarks.packingbench import scene_verify_packingbench as pb_adapter
-
-    config = sv.load_verify_thresholds(args.thresholds)
-    if args.settle_steps is not None:
-        config = sv.VerifyThresholds(**{**config.__dict__, "settle_steps": args.settle_steps})
-
-    verified_at = datetime.now(timezone.utc).isoformat()
-    inject = _soundness_injector(args.inject, config) if args.inject else None
-    captured, objects_meta = build_and_capture(
-        instance_id=args.instance_id,
-        robot=args.robot,
-        storage_root=Path(args.storage_root),
-        robot_dir=Path(args.robot_dir) if args.robot_dir else None,
-        config=config,
-        inject=inject,
-    )
-    # An injected case writes to its own artifact subdir so it never clobbers the clean run.
-    out_scene_id = (
-        f"{args.instance_id}__soundness__{args.inject}" if args.inject else args.instance_id
-    )
-    report = sv.evaluate_scene_verify(
-        scene_id=out_scene_id, captured=captured, config=config, verified_at=verified_at
-    )
-    # Engine writes the generic verdict/evidence; the PackingBench adapter writes its own
-    # legacy validation_summary.json (the engine has no PackingBench identity).
-    paths = sv.dump_report(report=report, captured=captured, artifacts_dir=args.artifacts_dir)
-    pb_adapter.write_validation_summary(
-        report,
-        artifacts_dir=args.artifacts_dir,
-        validated_asset_ids=tuple(m["object_id"] for m in objects_meta),
-    )
-    print(json.dumps(report.to_verdict_json(), indent=2))
-    print(f"\nverdict written: {paths['verdict']}")
-    # Authoritative, greppable gate signal: /opt/isaac-sim/python.sh collapses non-zero
-    # exit codes to 1, so CI should key on this line (or verdict.json) rather than $?.
-    print(
-        f"SCENE_VERIFY_RESULT scene_id={report.scene_id} overall_status={report.overall_status}",
-        flush=True,
-    )
-    return 0 if report.overall_status != "fail" else 2
-
-
-def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv)
-    from isaacsim import SimulationApp
-
-    SimulationApp({"headless": True, "width": 640, "height": 480})
-    rc = 1
-    try:
-        rc = run(args)
-    except Exception:
-        import traceback
-
-        traceback.print_exc()
-        rc = 1
-    sys.stdout.flush()
-    sys.stderr.flush()
-    # Isaac's simulation_app.close() hard-exits the process with code 0, which would mask
-    # rc. Artifacts are already flushed to disk by run(); exit explicitly with rc so a CI
-    # gate keying on the exit code can distinguish pass/warn (0) from fail (2).
-    os._exit(rc)
-
-
-if __name__ == "__main__":
-    main()

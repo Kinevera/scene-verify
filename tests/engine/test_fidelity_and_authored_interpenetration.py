@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.scene_verify import core as sv
+from scene_verify import core as sv
 
 
 @pytest.fixture()

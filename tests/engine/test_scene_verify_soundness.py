@@ -1,10 +1,10 @@
 """Venv-only soundness tests for the scene verifier engine.
 
-These run without Isaac (conftest mocks the Isaac modules; ``pxr``/``trimesh`` are real).
+These run without Isaac (no Isaac module is imported; ``pxr``/``trimesh`` are real).
 They are the credibility gate: they prove each defect class flips the right gate and that
 the physics-instability and missing-static-metadata buckets stay disjoint — before any
 failure-rate is quoted over a real corpus. The PackingBench legacy projection is covered
-separately in tests/benchmarks/test_scene_verify_packingbench.py.
+separately in RoboEval's tests/benchmarks/test_scene_verify_packingbench.py.
 """
 
 from __future__ import annotations
@@ -12,9 +12,9 @@ from __future__ import annotations
 import pytest
 import trimesh
 
-from app.scene_verify import core as sv
-from app.scene_verify import defects
-from app.scene_verify import geometry as geom
+from scene_verify import core as sv
+from scene_verify import defects
+from scene_verify import geometry as geom
 
 VERIFIED_AT = "2026-06-22T00:00:00+00:00"
 
@@ -30,17 +30,13 @@ def cfg() -> sv.VerifyThresholds:
 
 
 @pytest.fixture
-def real_pxr(monkeypatch):
-    """Swap the session-wide ``pxr`` MagicMock (from tests/conftest.py) for the real
-    installed USD for one test, so USD extraction/injection can be exercised in the venv
-    without Isaac. ``monkeypatch`` restores the mocks on teardown.
+def real_pxr():
+    """The real installed USD (usd-core in the dev group), so USD extraction/injection is
+    exercised without Isaac. In RoboEval this fixture swapped out a session-wide ``pxr``
+    MagicMock; here nothing mocks ``pxr``, so it only marks the tests that need it.
     """
     import importlib
-    import sys
 
-    for name in [n for n in list(sys.modules) if n == "pxr" or n.startswith("pxr.")]:
-        monkeypatch.delitem(sys.modules, name, raising=False)
-    importlib.invalidate_caches()
     return importlib.import_module("pxr")
 
 

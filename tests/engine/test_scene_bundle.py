@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from app.scene_verify.bundle import (
+from scene_verify.bundle import (
     STATIC_PHYSICS_MODES,
     SceneBundle,
     SceneBundleError,
@@ -90,8 +90,8 @@ def test_to_meta_shape_matches_capture_contract():
         }
     )
     meta = spec.to_meta()
-    # Keys must exactly match scripts/tools/verify_scene_bundle._meta so the shared capture
-    # layer treats bundle-built objects identically to manifest-built ones.
+    # Keys must exactly match RoboEval's scripts/tools/verify_scene_bundle._meta so the shared
+    # capture layer treats bundle-built objects identically to manifest-built ones.
     assert set(meta) == {
         "object_id",
         "prim_path",

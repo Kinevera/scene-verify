@@ -1,6 +1,6 @@
 # Scene-verifier thresholds — the single source of truth.
 #
-# Loaded by app.scene_verify.load_verify_thresholds().
+# Loaded by scene_verify.load_verify_thresholds().
 # Override at the CLI with `--thresholds <path>`. Nothing in the verifier hardcodes
 # these inline. Defaults mirror the host-validator constants so the verifier and the
 # existing validator agree on tolerances:
