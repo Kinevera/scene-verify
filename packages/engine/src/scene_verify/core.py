@@ -25,33 +25,21 @@ import json
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, Mapping, Sequence
+from typing import Any, Mapping, Sequence
+
+# The scene_verify/1 contract (schema version, statuses and buckets, each bucket naming exactly
+# one root cause) lives in the stdlib-only scene_verify_contract distribution, so the engine
+# and every consumer share one definition.
+from scene_verify_contract import GATE_STATUSES, SCHEMA_VERSION, Bucket, GateStatus
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 VERIFIER_VERSION = "0.2.0"
-SCHEMA_VERSION = "scene_verify/1"
 
-GateStatus = Literal["pass", "warn", "fail"]
-
-#: Each bucket names exactly one root cause. A gate's bucket is fixed at construction
-#: so a single failure can never be double-counted across buckets (e.g. a missing
-#: static tag is attributed to ``missing_static_metadata`` and never to
-#: ``physics_instability`` even though, left in the sim, it would also drift).
-Bucket = Literal[
-    "load",
-    "mesh_disagreement",
-    "interpenetration",
-    "physics_instability",
-    "fall_through",
-    "missing_static_metadata",
-    "labeling",
-    "reconstruction_fidelity",
-]
-
-_STATUS_RANK: dict[str, int] = {"pass": 0, "warn": 1, "fail": 2}
+#: GATE_STATUSES runs from least to most severe, so this is pass 0, warn 1, fail 2.
+_STATUS_RANK: dict[str, int] = {status: rank for rank, status in enumerate(GATE_STATUSES)}
 
 
 def worst_status(statuses: Sequence[str]) -> GateStatus:
