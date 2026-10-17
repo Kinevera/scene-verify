@@ -22,7 +22,8 @@ essentially every scene. We instead measure two signed depths independently:
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 import trimesh
@@ -38,7 +39,7 @@ import trimesh
 MESH_SAMPLE_SEED = 0
 
 
-def _sample_surface(mesh: "trimesh.Trimesh", n_samples: int) -> np.ndarray:
+def _sample_surface(mesh: trimesh.Trimesh, n_samples: int) -> np.ndarray:
     """Deterministic area-weighted surface samples (seeded; portable across trimesh 4.5/4.12)."""
     points, _ = trimesh.sample.sample_surface(mesh, n_samples, seed=MESH_SAMPLE_SEED)
     return np.asarray(points)
@@ -107,9 +108,7 @@ def scan_static_tag(stage: Any, prim_path: str) -> bool | None:
     root = stage.GetPrimAtPath(prim_path)
     if not root or not root.IsValid():
         return None
-    rigid_bodies = [
-        prim for prim in Usd.PrimRange(root) if prim.HasAPI(UsdPhysics.RigidBodyAPI)
-    ]
+    rigid_bodies = [prim for prim in Usd.PrimRange(root) if prim.HasAPI(UsdPhysics.RigidBodyAPI)]
     if not rigid_bodies:
         return True  # no dynamics authored => static collider
     for prim in rigid_bodies:
@@ -119,7 +118,7 @@ def scan_static_tag(stage: Any, prim_path: str) -> bool | None:
     return False  # rigid bodies present but none anchored => missing static tag
 
 
-def _mesh_prim_to_trimesh(prim: Any) -> "trimesh.Trimesh | None":
+def _mesh_prim_to_trimesh(prim: Any) -> trimesh.Trimesh | None:
     """Bake a single ``UsdGeom.Mesh`` prim into a world-space ``trimesh.Trimesh``."""
     from pxr import Usd, UsdGeom
 
@@ -155,9 +154,7 @@ def _mesh_prim_to_trimesh(prim: Any) -> "trimesh.Trimesh | None":
         offset += count
     if not faces:
         return None
-    tm = trimesh.Trimesh(
-        vertices=world, faces=np.asarray(faces, dtype=np.int64), process=False
-    )
+    tm = trimesh.Trimesh(vertices=world, faces=np.asarray(faces, dtype=np.int64), process=False)
     # Authored winding is untrustworthy (leftHanded orientation, inward-wound exports,
     # mirroring transforms), and the signed-distance core decides inside/outside from face
     # normals — inconsistent winding silently swaps phantom<->clip. Normalize to coherent
@@ -171,7 +168,7 @@ def _mesh_prim_to_trimesh(prim: Any) -> "trimesh.Trimesh | None":
     return tm
 
 
-def _concat(parts: list["trimesh.Trimesh"]) -> "trimesh.Trimesh | None":
+def _concat(parts: list[trimesh.Trimesh]) -> trimesh.Trimesh | None:
     if not parts:
         return None
     if len(parts) == 1:
@@ -179,7 +176,7 @@ def _concat(parts: list["trimesh.Trimesh"]) -> "trimesh.Trimesh | None":
     return trimesh.util.concatenate(parts)
 
 
-def usd_subtree_to_trimesh(stage: Any, prim_path: str) -> "trimesh.Trimesh | None":
+def usd_subtree_to_trimesh(stage: Any, prim_path: str) -> trimesh.Trimesh | None:
     """Concatenate all ``UsdGeom.Mesh`` descendants of ``prim_path`` into one world-space mesh.
 
     Returns ``None`` when no usable mesh geometry is found (routed to the ``labeling``
@@ -245,8 +242,8 @@ def _read_mesh_approximation(prim: Any) -> str | None:
 
 
 def _collision_proxy(
-    mesh: "trimesh.Trimesh", approximation: str | None
-) -> tuple["trimesh.Trimesh", bool]:
+    mesh: trimesh.Trimesh, approximation: str | None
+) -> tuple[trimesh.Trimesh, bool]:
     """The collider geometry PhysX uses for ``mesh`` under ``approximation``.
 
     Returns ``(proxy, synthesized)``. ``synthesized`` is True for a convex over-
@@ -274,7 +271,7 @@ def _collision_proxy(
     return mesh, False
 
 
-def _world_orientation_inverse(prim: Any) -> "np.ndarray | None":
+def _world_orientation_inverse(prim: Any) -> np.ndarray | None:
     """Pure inverse-rotation (trimesh column-convention 4x4) that removes ``prim``'s world
     ORIENTATION while preserving world scale and translation.
 
@@ -315,7 +312,7 @@ def _world_orientation_inverse(prim: Any) -> "np.ndarray | None":
 
 def _assemble_visual_collision(
     stage: Any, object_prim_path: str, *, frame: str = "world"
-) -> tuple["trimesh.Trimesh | None", "trimesh.Trimesh | None", bool]:
+) -> tuple[trimesh.Trimesh | None, trimesh.Trimesh | None, bool]:
     """Build (visual, collision, needs_sampling) from an object's mesh prims.
 
     A dedicated collision prim contributes directly. A renderable mesh contributes its
@@ -342,7 +339,7 @@ def _assemble_visual_collision(
 
     # The canonicalising inverse-rotation is taken from the first mesh prim and reused for all
     # parts, so every mesh is de-rotated consistently and relative offsets (and scale) are kept.
-    to_local: "np.ndarray | None" = None
+    to_local: np.ndarray | None = None
     canonicalise = frame == "local"
 
     visual_parts: list[trimesh.Trimesh] = []
@@ -404,8 +401,8 @@ def object_mesh_divergence(
 
 
 def mesh_pair_penetration_depth_m(
-    mesh_a: "trimesh.Trimesh | None",
-    mesh_b: "trimesh.Trimesh | None",
+    mesh_a: trimesh.Trimesh | None,
+    mesh_b: trimesh.Trimesh | None,
     *,
     n_samples: int = 2000,
 ) -> float:
@@ -466,18 +463,13 @@ def pairwise_collision_penetration_depth_m(
 # ---------------------------------------------------------------------------
 
 
-def _degenerate(mesh: "trimesh.Trimesh | None") -> bool:
+def _degenerate(mesh: trimesh.Trimesh | None) -> bool:
     return (
-        mesh is None
-        or len(mesh.faces) == 0
-        or len(mesh.vertices) == 0
-        or float(mesh.area) <= 0.0
+        mesh is None or len(mesh.faces) == 0 or len(mesh.vertices) == 0 or float(mesh.area) <= 0.0
     )
 
 
-def _signed_distance_inside_positive(
-    mesh: "trimesh.Trimesh", points: np.ndarray
-) -> np.ndarray:
+def _signed_distance_inside_positive(mesh: trimesh.Trimesh, points: np.ndarray) -> np.ndarray:
     """Signed distance (positive inside) without rtree/embree.
 
     ``trimesh.proximity.signed_distance`` relies on a ray engine (rtree) that is absent
@@ -493,8 +485,8 @@ def _signed_distance_inside_positive(
 
 
 def directional_mesh_divergence(
-    visual: "trimesh.Trimesh | None",
-    collision: "trimesh.Trimesh | None",
+    visual: trimesh.Trimesh | None,
+    collision: trimesh.Trimesh | None,
     *,
     n_samples: int = 2000,
     bvh_skip_margin_m: float = 0.003,
@@ -537,9 +529,7 @@ def directional_mesh_divergence(
         phantom_depth = np.clip(
             -_signed_distance_inside_positive(visual, collision_points), 0.0, None
         )
-        clip_depth = np.clip(
-            -_signed_distance_inside_positive(collision, visual_points), 0.0, None
-        )
+        clip_depth = np.clip(-_signed_distance_inside_positive(collision, visual_points), 0.0, None)
     except Exception as exc:  # pragma: no cover - defensive; degenerate sampling
         return {"mesh_present": False, "mode": "degenerate", "error": str(exc)}
 
@@ -553,7 +543,7 @@ def directional_mesh_divergence(
     }
 
 
-def reconstruction_mesh_stats(stage: Any, prim_paths: "list[str]") -> dict[str, Any]:
+def reconstruction_mesh_stats(stage: Any, prim_paths: list[str]) -> dict[str, Any]:
     """Measure the surface-density evidence for the reconstruction-fidelity gate.
 
     Face count and mesh-area/AABB-surface-area ratio over the union of the given subtrees,

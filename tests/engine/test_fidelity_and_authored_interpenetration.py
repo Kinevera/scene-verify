@@ -71,7 +71,10 @@ def test_authored_overlap_fires_even_when_settled_capture_is_clean(cfg):
     settle MUST still fail the gate — this is exactly the case the post-settle capture
     alone could never see."""
     authored = sv.CapturedPairOverlap(
-        "box_a", "box_b", overlap_volume_m3=1e-5, geometry_overlap_detected=True,
+        "box_a",
+        "box_b",
+        overlap_volume_m3=1e-5,
+        geometry_overlap_detected=True,
         penetration_depth_m=0.03,
     )
     report = _report(_evidence(pairwise_overlaps_pre_settle=(authored,)), cfg)
@@ -82,7 +85,10 @@ def test_authored_overlap_fires_even_when_settled_capture_is_clean(cfg):
 
 def test_settled_overlap_still_fires_and_is_phase_labelled(cfg):
     settled = sv.CapturedPairOverlap(
-        "box_a", "box_b", overlap_volume_m3=1e-5, geometry_overlap_detected=True,
+        "box_a",
+        "box_b",
+        overlap_volume_m3=1e-5,
+        geometry_overlap_detected=True,
         penetration_depth_m=0.03,
     )
     report = _report(_evidence(pairwise_overlaps=(settled,)), cfg)
@@ -104,7 +110,10 @@ def test_clean_two_phase_capture_passes(cfg):
 def test_authored_corner_clip_with_zero_mesh_depth_passes(cfg):
     """The AABB-corner-clip false-positive guard applies at the authored phase too."""
     clip = sv.CapturedPairOverlap(
-        "box_a", "box_b", overlap_volume_m3=7e-9, geometry_overlap_detected=True,
+        "box_a",
+        "box_b",
+        overlap_volume_m3=7e-9,
+        geometry_overlap_detected=True,
         penetration_depth_m=0.0,
     )
     report = _report(_evidence(pairwise_overlaps_pre_settle=(clip,)), cfg)
@@ -152,11 +161,11 @@ def test_fidelity_gates_present_with_reconstruction_declaration(cfg):
 @pytest.mark.parametrize(
     ("registered", "total", "expected"),
     [
-        (10, 90, "fail"),   # wh_secret: 0.111 — built from a sliver of the footage
-        (17, 90, "warn"),   # wh_forklift_aisle: 0.189
-        (10, 44, "warn"),   # wh_aisle_picker: 0.227
-        (47, 90, "pass"),   # wh_coach_factory: 0.522
-        (90, 90, "pass"),   # wh_garage_shop: 1.0
+        (10, 90, "fail"),  # wh_secret: 0.111 — built from a sliver of the footage
+        (17, 90, "warn"),  # wh_forklift_aisle: 0.189
+        (10, 44, "warn"),  # wh_aisle_picker: 0.227
+        (47, 90, "pass"),  # wh_coach_factory: 0.522
+        (90, 90, "pass"),  # wh_garage_shop: 1.0
     ],
 )
 def test_registration_coverage_bands(cfg, registered, total, expected):
@@ -181,13 +190,13 @@ def test_registration_coverage_fails_closed_when_not_declared(cfg):
 @pytest.mark.parametrize(
     ("face_count", "area_ratio", "expected"),
     [
-        (109, 0.0007, "fail"),        # wh_secret: the degenerate shell that passed v0.1
-        (443, 0.0001, "fail"),        # wh_fabric
-        (1114, 0.0025, "fail"),       # wh_forklift_aisle
-        (42_315, 0.0164, "warn"),     # wh_aisle_picker: partial but usable
-        (171_932, 0.05, "pass"),      # wh_coach_factory
+        (109, 0.0007, "fail"),  # wh_secret: the degenerate shell that passed v0.1
+        (443, 0.0001, "fail"),  # wh_fabric
+        (1114, 0.0025, "fail"),  # wh_forklift_aisle
+        (42_315, 0.0164, "warn"),  # wh_aisle_picker: partial but usable
+        (171_932, 0.05, "pass"),  # wh_coach_factory
         (1_564_909, 0.1269, "pass"),  # wh_garage_shop
-        (100_000, 0.001, "warn"),     # dense faces but sliver coverage: area-ratio co-signal
+        (100_000, 0.001, "warn"),  # dense faces but sliver coverage: area-ratio co-signal
     ],
 )
 def test_surface_density_bands(cfg, face_count, area_ratio, expected):
@@ -270,7 +279,10 @@ def test_nan_penetration_depth_falls_back_to_aabb_floor(cfg):
     import math as _math
 
     nan_pair = sv.CapturedPairOverlap(
-        "box_a", "box_b", overlap_volume_m3=0.000293, geometry_overlap_detected=True,
+        "box_a",
+        "box_b",
+        overlap_volume_m3=0.000293,
+        geometry_overlap_detected=True,
         penetration_depth_m=_math.nan,
     )
     for evidence in (

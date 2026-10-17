@@ -92,8 +92,14 @@ def _author_box_mesh(stage, path, *, extents=(0.10, 0.06, 0.04), translate=(0.0,
     mesh = UsdGeom.Mesh.Define(stage, path)
     hx, hy, hz = (e / 2.0 for e in extents)
     points = [
-        (-hx, -hy, -hz), (hx, -hy, -hz), (hx, hy, -hz), (-hx, hy, -hz),
-        (-hx, -hy, hz), (hx, -hy, hz), (hx, hy, hz), (-hx, hy, hz),
+        (-hx, -hy, -hz),
+        (hx, -hy, -hz),
+        (hx, hy, -hz),
+        (-hx, hy, -hz),
+        (-hx, -hy, hz),
+        (hx, -hy, hz),
+        (hx, hy, hz),
+        (-hx, hy, hz),
     ]
     mesh.CreatePointsAttr([Gf.Vec3f(*p) for p in points])
     mesh.CreateFaceVertexCountsAttr([4, 4, 4, 4, 4, 4])
@@ -198,9 +204,7 @@ def _report_for_defect(defect: str, cfg) -> sv.SceneVerifyReport:
     elif defect == "interpenetration":
         scene = _scene(
             objects=(_carton(), _item()),
-            overlaps=(
-                sv.CapturedPairOverlap("item", "target_carton", 0.0005, True),
-            ),
+            overlaps=(sv.CapturedPairOverlap("item", "target_carton", 0.0005, True),),
         )
     elif defect == "fall_through":
         scene = _scene(objects=(_carton(), _item(aabb_bottom_z=0.50)))
@@ -421,13 +425,22 @@ def _author_box_mesh_wound(stage, path, *, extents, translate=(0.0, 0.0, 0.0), i
     mesh = UsdGeom.Mesh.Define(stage, path)
     hx, hy, hz = (e / 2.0 for e in extents)
     points = [
-        (-hx, -hy, -hz), (hx, -hy, -hz), (hx, hy, -hz), (-hx, hy, -hz),
-        (-hx, -hy, hz), (hx, -hy, hz), (hx, hy, hz), (-hx, hy, hz),
+        (-hx, -hy, -hz),
+        (hx, -hy, -hz),
+        (hx, hy, -hz),
+        (-hx, hy, -hz),
+        (-hx, -hy, hz),
+        (hx, -hy, hz),
+        (hx, hy, hz),
+        (-hx, hy, hz),
     ]
     outward_quads = [
-        (0, 3, 2, 1), (4, 5, 6, 7),  # bottom (-z), top (+z)
-        (0, 1, 5, 4), (1, 2, 6, 5),  # front (-y), right (+x)
-        (2, 3, 7, 6), (3, 0, 4, 7),  # back (+y), left (-x)
+        (0, 3, 2, 1),
+        (4, 5, 6, 7),  # bottom (-z), top (+z)
+        (0, 1, 5, 4),
+        (1, 2, 6, 5),  # front (-y), right (+x)
+        (2, 3, 7, 6),
+        (3, 0, 4, 7),  # back (+y), left (-x)
     ]
     quads = [tuple(reversed(q)) for q in outward_quads] if inward else outward_quads
     mesh.CreatePointsAttr([Gf.Vec3f(*p) for p in points])
@@ -510,8 +523,10 @@ def test_sampled_divergence_is_reproducible():
     """Seeded surface sampling makes a sampled verdict deterministic: the same geometry must
     yield identical phantom/clip numbers run-to-run, so a value near a gate threshold (e.g.
     book_brick at the 0.015 phantom line) no longer flaps warn<->fail between runs."""
-    b1 = trimesh.creation.box([0.04, 0.04, 0.04]); b1.apply_translation([-0.05, 0.0, 0.0])
-    b2 = trimesh.creation.box([0.04, 0.04, 0.04]); b2.apply_translation([0.05, 0.0, 0.0])
+    b1 = trimesh.creation.box([0.04, 0.04, 0.04])
+    b1.apply_translation([-0.05, 0.0, 0.0])
+    b2 = trimesh.creation.box([0.04, 0.04, 0.04])
+    b2.apply_translation([0.05, 0.0, 0.0])
     dumbbell = trimesh.util.concatenate([b1, b2])
     hull = dumbbell.convex_hull
     r1 = geom.directional_mesh_divergence(dumbbell, hull, n_samples=2000, force_sample=True)
@@ -519,8 +534,11 @@ def test_sampled_divergence_is_reproducible():
     assert r1["mode"] == "sampled" and r1 == r2
 
     a = trimesh.creation.icosphere(subdivisions=3, radius=0.05)
-    c = trimesh.creation.icosphere(subdivisions=3, radius=0.05); c.apply_translation([0.05, 0.0, 0.0])
-    assert geom.mesh_pair_penetration_depth_m(a, c, n_samples=3000) == geom.mesh_pair_penetration_depth_m(a, c, n_samples=3000)
+    c = trimesh.creation.icosphere(subdivisions=3, radius=0.05)
+    c.apply_translation([0.05, 0.0, 0.0])
+    assert geom.mesh_pair_penetration_depth_m(
+        a, c, n_samples=3000
+    ) == geom.mesh_pair_penetration_depth_m(a, c, n_samples=3000)
 
 
 def test_object_mesh_divergence_is_pose_invariant_and_scale_correct(real_pxr):
@@ -548,9 +566,14 @@ def test_object_mesh_divergence_is_pose_invariant_and_scale_correct(real_pxr):
     base = divergence()
     assert base["mode"] == "sampled" and base["phantom_max_m"] > 0.0  # sphere over-approximates
     # Orientation-invariant.
-    assert base["phantom_max_m"] == pytest.approx(divergence(rotate_z_deg=37.0)["phantom_max_m"], abs=1e-5)
-    assert base["clip_max_m"] == pytest.approx(divergence(rotate_z_deg=37.0)["clip_max_m"], abs=1e-5)
-    # Scale-correct: divergence reported in WORLD units, so 2x scale -> ~2x divergence (not removed).
+    assert base["phantom_max_m"] == pytest.approx(
+        divergence(rotate_z_deg=37.0)["phantom_max_m"], abs=1e-5
+    )
+    assert base["clip_max_m"] == pytest.approx(
+        divergence(rotate_z_deg=37.0)["clip_max_m"], abs=1e-5
+    )
+    # Scale-correct: divergence reported in WORLD units, so 2x scale -> ~2x divergence
+    # (not removed).
     scaled = divergence(scale=2.0, rotate_z_deg=37.0)
     assert scaled["phantom_max_m"] == pytest.approx(2.0 * base["phantom_max_m"], rel=1e-3)
 
@@ -564,8 +587,8 @@ def test_object_mesh_divergence_invariant_to_settle_tumble_on_subprim(real_pxr):
 
     def divergence(tumble: bool) -> dict:
         stage = Usd.Stage.CreateInMemory()
-        UsdGeom.Xform.Define(stage, "/Root/Obj")            # object root: identity, fixed
-        UsdGeom.Xform.Define(stage, "/Root/Obj/Body")       # descendant body: carries the pose
+        UsdGeom.Xform.Define(stage, "/Root/Obj")  # object root: identity, fixed
+        UsdGeom.Xform.Define(stage, "/Root/Obj/Body")  # descendant body: carries the pose
         visual = _author_box_mesh(stage, "/Root/Obj/Body/Visual", extents=(0.10, 0.06, 0.04))
         UsdPhysics.CollisionAPI.Apply(visual)
         UsdPhysics.MeshCollisionAPI.Apply(visual).CreateApproximationAttr().Set("boundingSphere")

@@ -77,9 +77,7 @@ def _find_rigid_body_descendants(root_prim) -> list[object]:
     return rigid_bodies
 
 
-def _prim_has_named_ancestor_before_root(
-    prim, *, root_prim, ancestor_name: str
-) -> bool:
+def _prim_has_named_ancestor_before_root(prim, *, root_prim, ancestor_name: str) -> bool:
     current_prim = prim
     while current_prim and current_prim != root_prim:
         if current_prim.GetName() == ancestor_name:
@@ -243,9 +241,7 @@ def apply_dynamic_object_physics(
     )
     fixed_joint_prim = stage.GetPrimAtPath(fixed_joint_path)
     if not fixed_joint_prim.IsValid() or not fixed_joint_prim.IsA(UsdPhysics.Joint):
-        raise RuntimeError(
-            f"Could not find articulated carton fixed joint at {fixed_joint_path}"
-        )
+        raise RuntimeError(f"Could not find articulated carton fixed joint at {fixed_joint_path}")
 
     UsdPhysics.Joint(fixed_joint_prim).CreateJointEnabledAttr().Set(False)
     UsdPhysics.RigidBodyAPI(body_prim).CreateKinematicEnabledAttr().Set(True)
@@ -274,9 +270,7 @@ def get_dynamic_object_pose(
         return anchor_pose
 
     if len(pose_center_offset_xyz_m) != 3:
-        raise ValueError(
-            "pose_center_offset_xyz_m must contain exactly 3 values when provided"
-        )
+        raise ValueError("pose_center_offset_xyz_m must contain exactly 3 values when provided")
 
     rotated_offset = _rotate_vector_by_quaternion(
         (
@@ -342,5 +336,3 @@ def _rotate_vector_by_quaternion(
         vy + w * ty + (z * tx - x * tz),
         vz + w * tz + (x * ty - y * tx),
     )
-
-

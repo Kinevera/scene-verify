@@ -21,9 +21,10 @@ by one engine, with no per-consumer scoring drift.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 #: ``physics_mode`` values whose objects are graded as static (by metadata, not settle).
 #: Mirrors ``verify_scene_bundle.STATIC_PHYSICS_MODES`` so a bundle that carries a
@@ -76,7 +77,7 @@ class SceneObjectSpec:
     physics_mode: str | None = None
 
     @classmethod
-    def from_mapping(cls, mapping: Mapping[str, Any]) -> "SceneObjectSpec":
+    def from_mapping(cls, mapping: Mapping[str, Any]) -> SceneObjectSpec:
         if not isinstance(mapping, Mapping):
             raise SceneBundleError(f"object spec must be a mapping, got {mapping!r}")
         object_id = mapping.get("object_id")
@@ -111,9 +112,7 @@ class SceneObjectSpec:
                 mapping.get("pose_center_offset_xyz_m"),
                 where=f"object {object_id!r} 'pose_center_offset_xyz_m'",
             ),
-            position=_as_xyz(
-                mapping.get("position"), where=f"object {object_id!r} 'position'"
-            ),
+            position=_as_xyz(mapping.get("position"), where=f"object {object_id!r} 'position'"),
             physics_mode=physics_mode,
         )
 
@@ -152,7 +151,7 @@ class SceneBundle:
     provenance: Mapping[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_mapping(cls, mapping: Mapping[str, Any]) -> "SceneBundle":
+    def from_mapping(cls, mapping: Mapping[str, Any]) -> SceneBundle:
         if not isinstance(mapping, Mapping):
             raise SceneBundleError(f"bundle must be a mapping, got {mapping!r}")
         scene_id = mapping.get("scene_id")
@@ -178,7 +177,11 @@ class SceneBundle:
             raise SceneBundleError("'support_prim_path' must be an absolute prim path or null")
         settle_steps = mapping.get("settle_steps")
         if settle_steps is not None:
-            if not isinstance(settle_steps, int) or isinstance(settle_steps, bool) or settle_steps < 0:
+            if (
+                not isinstance(settle_steps, int)
+                or isinstance(settle_steps, bool)
+                or settle_steps < 0
+            ):
                 raise SceneBundleError("'settle_steps' must be a non-negative integer or null")
         provenance = mapping.get("provenance") or {}
         if not isinstance(provenance, Mapping):
@@ -193,7 +196,7 @@ class SceneBundle:
         )
 
     @classmethod
-    def from_json_file(cls, path: Path | str) -> "SceneBundle":
+    def from_json_file(cls, path: Path | str) -> SceneBundle:
         text = Path(path).read_text(encoding="utf-8")
         try:
             data = json.loads(text)

@@ -31,8 +31,12 @@ def _evidence(*, static_tag: bool, phantom_m: float):
                 is_static_expected=True,
                 has_static_tag=static_tag,
                 aabb_after=[-0.1, -0.1, 0.0, 0.1, 0.1, 0.2],
-                mesh_divergence={"mesh_present": True, "mode": "aabb_only",
-                                 "phantom_max_m": 0.0, "clip_max_m": 0.0},
+                mesh_divergence={
+                    "mesh_present": True,
+                    "mode": "aabb_only",
+                    "phantom_max_m": 0.0,
+                    "clip_max_m": 0.0,
+                },
             ),
             sv.CapturedObjectEvidence(
                 object_id="box",
@@ -40,8 +44,12 @@ def _evidence(*, static_tag: bool, phantom_m: float):
                 pose_before={"position": [0, 0, 0.1], "rotation": [1, 0, 0, 0]},
                 pose_after={"position": [0, 0, 0.1], "rotation": [1, 0, 0, 0]},
                 aabb_after=[0.0, 0.0, 0.02, 0.05, 0.05, 0.07],
-                mesh_divergence={"mesh_present": True, "mode": "sampled",
-                                 "phantom_max_m": phantom_m, "clip_max_m": 0.0},
+                mesh_divergence={
+                    "mesh_present": True,
+                    "mode": "sampled",
+                    "phantom_max_m": phantom_m,
+                    "clip_max_m": 0.0,
+                },
             ),
         ),
         load_ok=True,
@@ -88,8 +96,7 @@ def test_fail_verdict_satisfies_consumer_contract():
     verdict = _verdict(static_tag=False, phantom_m=0.001)
     assert verdict["overall_status"] == "fail"
     assert any(
-        g["gate"] == "static_metadata_present" and g["status"] == "fail"
-        for g in verdict["gates"]
+        g["gate"] == "static_metadata_present" and g["status"] == "fail" for g in verdict["gates"]
     )
     _assert_consumer_contract(verdict)
 

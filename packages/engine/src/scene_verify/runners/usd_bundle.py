@@ -33,7 +33,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -119,9 +119,7 @@ def build_generic_scene(*, bundle, usd_path: str, config):
     for spec in bundle.objects:
         prim = stage.GetPrimAtPath(spec.prim_path)
         if not prim.IsValid():
-            raise RuntimeError(
-                f"object {spec.object_id!r}: prim not found at {spec.prim_path}"
-            )
+            raise RuntimeError(f"object {spec.object_id!r}: prim not found at {spec.prim_path}")
         if spec.is_static_expected:
             continue
         result = apply_dynamic_object_physics(
@@ -133,6 +131,7 @@ def build_generic_scene(*, bundle, usd_path: str, config):
         # flips kinematicEnabled. A kinematically-pinned "frozen scene" declared free would
         # sail through settle/fall gates untouched; unfreeze it so the gates grade physics.
         from pxr import Usd
+
         for sub in Usd.PrimRange(stage.GetPrimAtPath(spec.prim_path)):
             if sub.HasAPI(UsdPhysics.RigidBodyAPI):
                 api = UsdPhysics.RigidBodyAPI(sub)
@@ -178,7 +177,7 @@ def run(args: argparse.Namespace) -> int:
         config = sv.VerifyThresholds(**{**config.__dict__, "settle_steps": settle_override})
 
     usd_path = _resolve_usd_path(bundle.usd_stage_path)
-    verified_at = datetime.now(timezone.utc).isoformat()
+    verified_at = datetime.now(UTC).isoformat()
     stage, world, objects_meta, support_prim_path = build_generic_scene(
         bundle=bundle, usd_path=usd_path, config=config
     )
@@ -209,9 +208,7 @@ def run(args: argparse.Namespace) -> int:
         from scene_verify import geometry as geom
 
         try:
-            measured = geom.reconstruction_mesh_stats(
-                stage, [m["prim_path"] for m in objects_meta]
-            )
+            measured = geom.reconstruction_mesh_stats(stage, [m["prim_path"] for m in objects_meta])
         except Exception as exc:  # pathological geometry must warn, not crash the run
             measured = {"measured": False, "error": str(exc)}
         captured = dataclasses.replace(
@@ -226,12 +223,13 @@ def run(args: argparse.Namespace) -> int:
 
     usd_sha256 = hashlib.sha256(Path(usd_path).read_bytes()).hexdigest()
     report = sv.evaluate_scene_verify(
-        scene_id=bundle.scene_id, captured=captured, config=config, verified_at=verified_at,
+        scene_id=bundle.scene_id,
+        captured=captured,
+        config=config,
+        verified_at=verified_at,
         usd_sha256=usd_sha256,
     )
-    paths = sv.dump_report(
-        report=report, captured=captured, artifacts_dir=args.artifacts_dir
-    )
+    paths = sv.dump_report(report=report, captured=captured, artifacts_dir=args.artifacts_dir)
     verdict = report.to_verdict_json()
     if args.emit_sidecar:
         sidecar = Path(usd_path).parent / "scene_verify.json"

@@ -27,11 +27,11 @@ def capture_scene_evidence(
 
     Shared by the PackingBench worker (``build_and_capture`` in RoboEval) and the generic
     ``scene_verify.runners.usd_bundle`` runner, so both grade scenes through one capture
-    implementation with no per-consumer drift. ``objects_meta`` rows carry: ``object_id``, ``prim_path``,
-    ``pose_prim_path``, ``pose_center_offset_xyz_m``, ``position``, ``physics_mode``,
-    ``is_static_expected``. Requires a booted ``SimulationApp`` and a ``world`` already
-    bound to ``stage`` (poses are captured before/after a passive ``config.settle_steps``
-    settle). Returns ``(captured, objects_meta)``.
+    implementation with no per-consumer drift. ``objects_meta`` rows carry: ``object_id``,
+    ``prim_path``, ``pose_prim_path``, ``pose_center_offset_xyz_m``, ``position``,
+    ``physics_mode``, ``is_static_expected``. Requires a booted ``SimulationApp`` and a
+    ``world`` already bound to ``stage`` (poses are captured before/after a passive
+    ``config.settle_steps`` settle). Returns ``(captured, objects_meta)``.
     """
     from pxr import UsdGeom
 
@@ -74,16 +74,14 @@ def capture_scene_evidence(
         return pose
 
     def _capture_aabbs() -> dict:
-        bounds = geom.world_aabb_bounds_by_prim_path(
-            stage, [m["prim_path"] for m in objects_meta]
-        )
+        bounds = geom.world_aabb_bounds_by_prim_path(stage, [m["prim_path"] for m in objects_meta])
         if mpu != 1.0:
             # Scale at the source so AABBs, table_top_z, and the overlap volumes (computed
             # from these bounds) are all in metres without further per-field scaling.
             bounds = {k: _scale_aabb(v) for k, v in bounds.items()}
         return bounds
 
-    def _capture_pair_overlaps(bounds: dict, phase: str) -> list["sv.CapturedPairOverlap"]:
+    def _capture_pair_overlaps(bounds: dict, phase: str) -> list[sv.CapturedPairOverlap]:
         overlaps: list[sv.CapturedPairOverlap] = []
         for i in range(len(objects_meta)):
             for j in range(i + 1, len(objects_meta)):
@@ -161,12 +159,15 @@ def capture_scene_evidence(
 
     table_top_z = None
     if support_prim_path:
-        support_bounds = geom.world_aabb_bounds_by_prim_path(
-            stage, [support_prim_path]
-        ).get(support_prim_path)
+        support_bounds = geom.world_aabb_bounds_by_prim_path(stage, [support_prim_path]).get(
+            support_prim_path
+        )
         if support_bounds:
             table_top_z = float(support_bounds[5]) * mpu
-    print(f"[verify] AABBs+overlaps captured ({len(overlaps)} pairs), table_top_z={table_top_z}", flush=True)
+    print(
+        f"[verify] AABBs+overlaps captured ({len(overlaps)} pairs), table_top_z={table_top_z}",
+        flush=True,
+    )
 
     captured_objects = []
     for m in objects_meta:
@@ -187,9 +188,7 @@ def capture_scene_evidence(
         print(f"[verify]   object {m['object_id']}: mode={divergence.get('mode')}", flush=True)
         try:
             static_tag = (
-                geom.scan_static_tag(stage, m["prim_path"])
-                if m["is_static_expected"]
-                else None
+                geom.scan_static_tag(stage, m["prim_path"]) if m["is_static_expected"] else None
             )
         except Exception as exc:
             static_tag = None

@@ -13,7 +13,8 @@ in ``run_scene_verify_soundness.py`` stays declarative:
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 #: xformOp suffix used so injected ops never collide with authored transform ops.
 _DEFECT_OP_SUFFIX = "scene_verify_defect"

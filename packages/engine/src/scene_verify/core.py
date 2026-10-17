@@ -23,9 +23,10 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 # The scene_verify/1 contract (schema version, statuses and buckets, each bucket naming exactly
 # one root cause) lives in the stdlib-only scene_verify_contract distribution, so the engine
@@ -84,7 +85,7 @@ class VerifyThresholds:
     defect_interpenetration_overlap_m: float
 
     @classmethod
-    def from_mapping(cls, mapping: Mapping[str, Any]) -> "VerifyThresholds":
+    def from_mapping(cls, mapping: Mapping[str, Any]) -> VerifyThresholds:
         root = mapping.get("scene_verify", mapping)
         settle = root["settle"]
         mesh = root["mesh_agreement"]
@@ -109,12 +110,8 @@ class VerifyThresholds:
             interpenetration_max_penetration_depth_m=float(
                 interpenetration["max_penetration_depth_m"]
             ),
-            interpenetration_max_overlap_volume_m3=float(
-                interpenetration["max_overlap_volume_m3"]
-            ),
-            fall_through_max_bottom_below_table_m=float(
-                fall_through["max_bottom_below_table_m"]
-            ),
+            interpenetration_max_overlap_volume_m3=float(interpenetration["max_overlap_volume_m3"]),
+            fall_through_max_bottom_below_table_m=float(fall_through["max_bottom_below_table_m"]),
             fidelity_min_face_count_fail=int(fidelity.get("min_face_count_fail", 2000)),
             fidelity_min_face_count_warn=int(fidelity.get("min_face_count_warn", 50000)),
             fidelity_min_area_ratio_warn=float(fidelity.get("min_area_ratio_warn", 0.01)),
@@ -255,7 +252,7 @@ class SceneVerifyReport:
         gates: Sequence[GateResult],
         verified_at: str,
         usd_sha256: str | None = None,
-    ) -> "SceneVerifyReport":
+    ) -> SceneVerifyReport:
         overall = worst_status([gate.status for gate in gates])
         return cls(
             scene_id=scene_id,
@@ -309,7 +306,7 @@ def _quaternion_angle_deg(
     """Geodesic angle (degrees) between two unit quaternions [qw, qx, qy, qz]."""
     if quat_a is None or quat_b is None or len(quat_a) != 4 or len(quat_b) != 4:
         return None
-    dot = sum(float(a) * float(b) for a, b in zip(quat_a, quat_b))
+    dot = sum(float(a) * float(b) for a, b in zip(quat_a, quat_b, strict=False))
     dot = max(-1.0, min(1.0, abs(dot)))
     return math.degrees(2.0 * math.acos(dot))
 
@@ -323,7 +320,7 @@ def _linear_displacement_m(
     after = pose_after.get("position")
     if not before or not after or len(before) != 3 or len(after) != 3:
         return None
-    return math.sqrt(sum((float(a) - float(b)) ** 2 for a, b in zip(after, before)))
+    return math.sqrt(sum((float(a) - float(b)) ** 2 for a, b in zip(after, before, strict=False)))
 
 
 def build_scene_load_gate(captured: CapturedSceneEvidence) -> GateResult:
@@ -367,14 +364,14 @@ def evaluate_mesh_agreement_gate(
         if not mesh_present:
             statuses.append("warn")
             buckets.append("labeling")
-            per_object.append(
-                {"object_id": object_id, "mode": "missing", "mesh_present": False}
-            )
+            per_object.append({"object_id": object_id, "mode": "missing", "mesh_present": False})
             continue
 
         phantom_max = float(divergence.get("phantom_max_m", 0.0) or 0.0)
         clip_max = float(divergence.get("clip_max_m", 0.0) or 0.0)
-        phantom_ratio = phantom_max / config.mesh_phantom_fail_m if config.mesh_phantom_fail_m else 0.0
+        phantom_ratio = (
+            phantom_max / config.mesh_phantom_fail_m if config.mesh_phantom_fail_m else 0.0
+        )
         clip_ratio = clip_max / config.mesh_clip_fail_m if config.mesh_clip_fail_m else 0.0
         score = max(0.0, min(1.0, max(phantom_ratio, clip_ratio)))
 
@@ -403,7 +400,7 @@ def evaluate_mesh_agreement_gate(
     overall = worst_status(statuses)
     # Pick the bucket of the most-severe contributing object.
     bucket: Bucket = "mesh_disagreement"
-    for status, candidate in zip(statuses, buckets):
+    for status, candidate in zip(statuses, buckets, strict=False):
         if status == overall:
             bucket = candidate
             break
@@ -529,16 +526,12 @@ def build_static_settle_gate(
                 {
                     "object_id": obj.object_id,
                     "linear_displacement_m": None if linear is None else round(linear, 6),
-                    "angular_displacement_deg": None
-                    if angular is None
-                    else round(angular, 4),
+                    "angular_displacement_deg": None if angular is None else round(angular, 4),
                 }
             )
     status: GateStatus = "fail" if offenders else ("warn" if unassessed else "pass")
     score = max(
-        max_linear / config.max_linear_displacement_m
-        if config.max_linear_displacement_m
-        else 0.0,
+        max_linear / config.max_linear_displacement_m if config.max_linear_displacement_m else 0.0,
         max_angular / config.max_angular_displacement_deg
         if config.max_angular_displacement_deg
         else 0.0,
@@ -670,9 +663,7 @@ def build_recon_registration_gate(
     )
 
 
-def build_recon_density_gate(
-    fidelity: Mapping[str, Any], config: VerifyThresholds
-) -> GateResult:
+def build_recon_density_gate(fidelity: Mapping[str, Any], config: VerifyThresholds) -> GateResult:
     """Grade measured surface density of a reconstruction.
 
     Two signals, both measured from the stage (never trusted from the producer): absolute
@@ -695,8 +686,7 @@ def build_recon_density_gate(
     if face_count < config.fidelity_min_face_count_fail:
         status: GateStatus = "fail"
     elif face_count < config.fidelity_min_face_count_warn or (
-        isinstance(area_ratio, (int, float))
-        and area_ratio < config.fidelity_min_area_ratio_warn
+        isinstance(area_ratio, (int, float)) and area_ratio < config.fidelity_min_area_ratio_warn
     ):
         status = "warn"
     else:
