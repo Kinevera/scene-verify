@@ -9,6 +9,7 @@ helpers; this copy is maintained here (scene-verify-0001).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 ARTVIP_CARTON_BASE_KINEMATIC_MODE = "artvip_carton_base_kinematic"
 ARTVIP_PUMP_BOTTLE_RIGID_LOCK_MODE = "artvip_pump_bottle_rigid_lock"
@@ -67,7 +68,7 @@ def _find_first_rigid_body_descendant(root_prim):
     return None
 
 
-def _find_rigid_body_descendants(root_prim) -> list[object]:
+def _find_rigid_body_descendants(root_prim) -> list[Any]:
     from pxr import Usd, UsdPhysics
 
     rigid_bodies = []

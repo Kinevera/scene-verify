@@ -118,7 +118,7 @@ def inject_fall_through(stage: Any, object_prim_path: str) -> dict[str, Any]:
     try:
         from pxr import PhysxSchema  # noqa: F401
     except Exception:  # pragma: no cover - PhysxSchema optional in plain USD
-        PhysxSchema = None  # type: ignore[assignment]
+        PhysxSchema = None
 
     root = _require_prim(stage, object_prim_path)
     removed: list[str] = []

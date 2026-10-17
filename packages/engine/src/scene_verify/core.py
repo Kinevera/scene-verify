@@ -353,7 +353,7 @@ def evaluate_mesh_agreement_gate(
             detail={"reason": "no objects carried mesh divergence evidence"},
         )
 
-    statuses: list[str] = []
+    statuses: list[GateStatus] = []
     buckets: list[Bucket] = []
     worst_score = 0.0
     worst_object: dict[str, Any] = {}

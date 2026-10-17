@@ -422,8 +422,9 @@ def mesh_pair_penetration_depth_m(
     """
     if _degenerate(mesh_a) or _degenerate(mesh_b):
         return 0.0
-    a_min, a_max = np.asarray(mesh_a.bounds[0]), np.asarray(mesh_a.bounds[1])
-    b_min, b_max = np.asarray(mesh_b.bounds[0]), np.asarray(mesh_b.bounds[1])
+    # _degenerate() returned False for both, so neither mesh is None (mypy cannot see it).
+    a_min, a_max = np.asarray(mesh_a.bounds[0]), np.asarray(mesh_a.bounds[1])  # type: ignore[union-attr]
+    b_min, b_max = np.asarray(mesh_b.bounds[0]), np.asarray(mesh_b.bounds[1])  # type: ignore[union-attr]
     if np.any(a_min > b_max) or np.any(b_min > a_max):
         return 0.0  # AABBs disjoint => no contact at all
     a_points = _sample_surface(mesh_a, n_samples)
@@ -507,8 +508,9 @@ def directional_mesh_divergence(
         mode = "missing" if (visual is None or collision is None) else "degenerate"
         return {"mesh_present": False, "mode": mode}
 
-    v_min, v_max = np.asarray(visual.bounds[0]), np.asarray(visual.bounds[1])
-    c_min, c_max = np.asarray(collision.bounds[0]), np.asarray(collision.bounds[1])
+    # _degenerate() returned False for both, so neither mesh is None (mypy cannot see it).
+    v_min, v_max = np.asarray(visual.bounds[0]), np.asarray(visual.bounds[1])  # type: ignore[union-attr]
+    c_min, c_max = np.asarray(collision.bounds[0]), np.asarray(collision.bounds[1])  # type: ignore[union-attr]
     # Cheap pre-pass: how far each box sticks out beyond the other, per axis.
     phantom_gap = float(max(0.0, np.max(np.maximum(v_min - c_min, c_max - v_max))))
     clip_gap = float(max(0.0, np.max(np.maximum(c_min - v_min, v_max - c_max))))

@@ -18,7 +18,8 @@ def _normalize_bounds_xyz(
 ) -> tuple[float, float, float, float, float, float] | None:
     if bounds_xyz is None or len(bounds_xyz) != 6:
         return None
-    return tuple(float(value) for value in bounds_xyz)
+    # Six values: the length is checked above, which mypy cannot see through tuple().
+    return tuple(float(value) for value in bounds_xyz)  # type: ignore[return-value]
 
 
 def aabb_overlap_xyz(

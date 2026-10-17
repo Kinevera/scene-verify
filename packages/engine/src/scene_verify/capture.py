@@ -131,7 +131,8 @@ def capture_scene_evidence(
                         sv.CapturedPairOverlap(
                             a["object_id"],
                             b["object_id"],
-                            float(ov.get("overlap_volume_m3") or 0.0),
+                            # aabb_overlap_xyz types its values as object; this one is a float.
+                            float(ov.get("overlap_volume_m3") or 0.0),  # type: ignore[arg-type]
                             aabb_hit,
                             penetration_depth_m=penetration,
                         )

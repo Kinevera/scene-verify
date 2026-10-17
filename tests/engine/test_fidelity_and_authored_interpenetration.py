@@ -14,6 +14,8 @@ tests are the falsifiable form of that claim:
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from scene_verify import core as sv
@@ -25,7 +27,7 @@ def cfg() -> sv.VerifyThresholds:
 
 
 def _object(object_id: str = "box", **overrides):
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         object_id=object_id,
         is_static_expected=False,
         pose_before={"position": [0, 0, 0.1], "rotation": [1, 0, 0, 0]},
@@ -43,7 +45,7 @@ def _object(object_id: str = "box", **overrides):
 
 
 def _evidence(**overrides) -> sv.CapturedSceneEvidence:
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         objects=(_object("box_a"), _object("box_b", aabb_after=[0.2, 0.0, 0.0, 0.3, 0.1, 0.1])),
         load_ok=True,
         load_detail={"object_count": 2},
