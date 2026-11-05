@@ -1,0 +1,67 @@
+# Scene-verifier thresholds — the single source of truth.
+#
+# Loaded by scene_verify.load_verify_thresholds().
+# Override at the CLI with `--thresholds <path>`. Nothing in the verifier hardcodes
+# these inline. Defaults mirror the host-validator constants so the verifier and the
+# existing validator agree on tolerances:
+#   max_linear_displacement_m   <- SPAWN_STABILITY_TOLERANCE_M   (0.01)
+#   pose_alignment_tolerance_m  <- POSE_ALIGNMENT_TOLERANCE_M    (0.03)
+#   table_contact_tolerance_m   <- TABLE_CONTACT_TOLERANCE_M     (0.011)
+#   interpenetration floor      ~  CONTACT_AABB_OVERLAP_AXIS_TOLERANCE_M (0.001) cubed
+scene_verify:
+  version: "0.2.0"
+
+  # Passive-settle stability window (matches the validator's settle loop).
+  settle:
+    settle_steps: 60
+    max_linear_displacement_m: 0.01
+    max_angular_displacement_deg: 5.0
+    pose_alignment_tolerance_m: 0.03
+    table_contact_tolerance_m: 0.011
+
+  # Directional visual-vs-collision mesh agreement (signed depth, never Chamfer).
+  # phantom_* = collision outside visual (phantom contacts).
+  # clip_*    = visual outside collision (clip-through / missing collision parts).
+  mesh_agreement:
+    n_samples: 2000
+    bvh_skip_margin_m: 0.003
+    phantom_warn_m: 0.005
+    phantom_fail_m: 0.015
+    clip_warn_m: 0.005
+    clip_fail_m: 0.015
+
+  # Pairwise interpenetration, graded at BOTH capture phases with the same tolerances:
+  # authored (t=0, before any physics step — PhysX depenetrates authored overlaps within
+  # the first settle steps, so the settled state alone is blind to them) and settled
+  # (post-settle residual clashes). Primary signal is mesh-level penetration depth
+  # between collision proxies (max_penetration_depth_m): AABB overlap alone over-flags two
+  # validly-placed items whose bounding boxes clip at a corner while the meshes never touch
+  # (the corpus surfaced 7 mm³ AABB false-positives). The AABB-volume floor is the fallback
+  # only when a pair has no usable collision geometry to sample.
+  interpenetration:
+    max_penetration_depth_m: 0.003
+    max_overlap_volume_m3: 0.0000005
+
+  # Fall-through: how far an object's settled AABB bottom may sit below the table top.
+  fall_through:
+    max_bottom_below_table_m: 0.02
+
+  # Reconstruction-fidelity gates — applied ONLY to scenes whose bundle declares
+  # reconstruction provenance (a curated benchmark asset is legitimately low-poly, so
+  # grading its density would be meaningless). Both density signals are scale-invariant
+  # (COLMAP output has arbitrary units; nothing here may be denominated in metres).
+  # Defaults calibrated on the 2026-07 natural pilot corpus: degenerate shells sat at
+  # 109/443/1114 faces and 0.0001-0.0025 area ratio; substantial reconstructions at
+  # 42k-1.5M faces and 0.016-0.127.
+  fidelity:
+    min_face_count_fail: 2000
+    min_face_count_warn: 50000
+    min_area_ratio_warn: 0.01
+    min_registered_ratio_fail: 0.15
+    min_registered_ratio_warn: 0.5
+
+  # Defect-injection magnitudes for the soundness harness (must clear warn/fail bands).
+  defects:
+    oversize_factor: 1.5
+    undersize_factor: 0.6
+    interpenetration_overlap_m: 0.03
