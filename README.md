@@ -33,14 +33,14 @@ credential for it, such as a read-only deploy key or a fine-grained token.
 The contract alone:
 
 ```
-scene-verify-contract @ git+https://github.com/Cybernetic-EAI/scene-verify@v0.3.0#subdirectory=packages/contract
+scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.3.0#subdirectory=packages/contract
 ```
 
 The engine requires `scene-verify-contract==0.3.0`, which is on no package index, so name both:
 
 ```
-scene-verify-contract @ git+https://github.com/Cybernetic-EAI/scene-verify@v0.3.0#subdirectory=packages/contract
-scene-verify @ git+https://github.com/Cybernetic-EAI/scene-verify@v0.3.0#subdirectory=packages/engine
+scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.3.0#subdirectory=packages/contract
+scene-verify @ git+https://github.com/Kinevera/scene-verify@v0.3.0#subdirectory=packages/engine
 ```
 
 Validate a verdict with the contract:

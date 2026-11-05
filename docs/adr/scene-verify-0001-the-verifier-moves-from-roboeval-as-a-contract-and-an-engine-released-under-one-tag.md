@@ -45,6 +45,8 @@ be created and the code moved.
 
 1. **The repository is `Cybernetic-EAI/scene-verify` (Q1).** The repository, the engine's
    distribution and its import package share the contract's name.
+   The repository moved with the organization to `Kinevera/scene-verify` by 2026-11-02 (the old
+   URL redirects); the name is unchanged.
 2. **It is private (Q2).** A consumer that pins it (SceneForge's CI and images, RoboEval) needs a
    read credential, such as a read-only deploy key or a fine-grained token stored as that
    consumer's repository secret, each added with the maintainer's approval when the pin lands.
