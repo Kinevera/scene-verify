@@ -283,6 +283,11 @@ REJECTIONS: list[tuple[str, Callable[[dict], None], str]] = [
     ),
     ("gate score NaN", _set_gate(2, "score", math.nan), "verdict.gates[2].score must be a finite"),
     ("gate score inf", _set_gate(2, "score", math.inf), "verdict.gates[2].score must be a finite"),
+    (
+        "gate score an integer too large for a float",
+        _set_gate(2, "score", 10**400),
+        "verdict.gates[2].score must be a finite",
+    ),
     ("gate bucket missing", _drop_gate_key(3, "bucket"), "verdict.gates[3] is missing 'bucket'"),
     ("gate bucket unknown", _set_gate(3, "bucket", "vibes"), "verdict.gates[3].bucket must be one"),
     ("gate detail missing", _drop_gate_key(3, "detail"), "verdict.gates[3] is missing 'detail'"),

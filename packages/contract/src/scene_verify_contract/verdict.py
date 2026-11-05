@@ -204,16 +204,23 @@ def _gate(data: object, where: str) -> GateVerdict:
     status = _status(_required(gate, "status", where), f"{where}.status")
     score = _required(gate, "score", where)
     if score is not None:
-        if (
-            isinstance(score, bool)
-            or not isinstance(score, int | float)
-            or not math.isfinite(score)
-        ):
-            raise VerdictError(f"{where}.score must be a finite number or null, got {_show(score)}")
-        score = float(score)
+        if isinstance(score, bool) or not isinstance(score, int | float):
+            raise _score_error(score, where)
+        try:
+            # A JSON integer too large for a float raises OverflowError here.
+            as_float = float(score)
+        except OverflowError:
+            raise _score_error(score, where) from None
+        if not math.isfinite(as_float):
+            raise _score_error(score, where)
+        score = as_float
     bucket = _bucket(_required(gate, "bucket", where), f"{where}.bucket")
     detail = _mapping(_required(gate, "detail", where), f"{where}.detail")
     return GateVerdict(gate=name, status=status, score=score, bucket=bucket, detail=dict(detail))
+
+
+def _score_error(score: object, where: str) -> VerdictError:
+    return VerdictError(f"{where}.score must be a finite number or null, got {_show(score)}")
 
 
 def _bucket_attribution(data: object, where: str) -> dict[Bucket, tuple[str, ...]]:

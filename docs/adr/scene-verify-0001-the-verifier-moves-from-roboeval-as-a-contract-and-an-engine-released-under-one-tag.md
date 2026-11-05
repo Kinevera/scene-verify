@@ -1,6 +1,6 @@
 # scene-verify-0001: The verifier moves from RoboEval as a contract and an engine released under one tag
 
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-11-05 (the validator's rules)
 - **Date:** 2026-10-17
 - **Scope:** What moves from RoboEval into this repository, how it is packaged, versioned and
   pinned, how its history moves, and how the repository is set up and receives changes
@@ -61,8 +61,9 @@ be created and the code moved.
    from RoboEval.
 4. **Two distributions in one uv workspace, released under one tag (Q4).**
    `scene-verify-contract` (import `scene_verify_contract`) holds the `scene_verify/1` verdict
-   types, constants and a validator extracted from `core.py`, with no dependency outside the
-   standard library. `scene-verify` (import `scene_verify`) is the engine: it depends on the
+   types and constants extracted from `core.py` and a validator for a received verdict, new code
+   written for the contract (its rules are in the amendment below), with no dependency outside
+   the standard library. `scene-verify` (import `scene_verify`) is the engine: it depends on the
    contract at the same version and on numpy, trimesh and PyYAML, and takes `pxr` and `isaacsim`
    from the runtime it runs in. Both require Python 3.11 or later. Both ship under one annotated
    tag with a GitHub release, the first being v0.3.0, and the engine's `VERIFIER_VERSION` follows
@@ -92,6 +93,48 @@ Adopted as detail, not asked: the runner moves as it is, written against Isaac S
 run on 6.2. SceneForge's sceneforge-0021 (item 2) requires the engine to be checked on Isaac Sim
 6.2 under SceneForge #87 or #28 before it runs there; that check needs SceneForge's Isaac Sim
 worker image (#78), so it falls to #28.
+
+### Amendment (2026-11-05): the validator's rules
+
+The validator's rules are part of the contract (`AGENTS.md`, binding rule 2), and the record
+above named the validator without them. On 2026-11-05 the maintainer ruled, as recommended, to
+record the validator's rules as built. `parse_verdict` in `scene_verify_contract` accepts a
+verdict only when all of the following hold, and otherwise raises `VerdictError` naming the
+first field that breaks one by its path, such as `verdict.gates[2].score`:
+
+1. The verdict is a JSON object. Keys the contract does not define are ignored.
+2. `schema_version` is present and is the string `scene_verify/1` or a string that starts with
+   `scene_verify/1.`; any other major, such as `scene_verify/2`, is refused.
+3. `scene_id`, `verified_at` and `verifier_version` are present and are non-empty strings.
+4. `verified_at` parses with Python's `datetime.fromisoformat`. That accepts more than a full
+   timestamp: a date alone (`2026-11-05`), a time without a UTC offset, and the basic format
+   without separators (`20261105`) all pass.
+5. `overall_status` is present and is one of `pass`, `warn` or `fail`.
+6. `gates` is present and is a non-empty list. Each gate is a JSON object with a `gate` name that
+   is a non-empty string, a `status` from `pass`, `warn` or `fail`, a `score`, a `bucket` from the
+   closed set (`load`, `mesh_disagreement`, `interpenetration`, `physics_instability`,
+   `fall_through`, `missing_static_metadata`, `labeling`, `reconstruction_fidelity`), and a
+   `detail` that is a JSON object. All five keys are required.
+7. A gate's `score` is null or a number that is not a boolean and is finite as a float: NaN,
+   infinity, and an integer too large to convert to a float are refused. An integer score is
+   read as a float. No other range is checked.
+8. No two gates share a name.
+9. `overall_status` equals the most severe gate status, in the order `pass`, `warn`, `fail`.
+10. `bucket_attribution` is present, is a JSON object whose keys are buckets from the closed set
+    and whose values are lists of non-empty strings, and equals exactly the attribution the
+    gates imply: every gate whose status is not `pass`, listed under its own bucket in gate
+    order, with no other bucket and no other name.
+11. `usd_sha256` is optional. When the key is present, its value is a string of exactly 64
+    lowercase hex characters; null, an empty string, uppercase hex or surrounding whitespace is
+    refused.
+
+SceneForge's current `scene_verify` gate (in its scene release service) is looser than these
+rules. It treats a null or blank `usd_sha256` as absent, strips and lowercases the value before
+comparing it, and checks neither that `overall_status` agrees with the gates nor the gates'
+buckets and `bucket_attribution`. When SceneForge adopts `parse_verdict` (SceneForge #28), it
+will therefore refuse some verdicts its gate passes today; the change is in the fail-closed
+direction. Verdicts the engine writes are unaffected: it writes `usd_sha256` as a lowercase hex
+digest and omits the key when it has no stage digest.
 
 ## Consequences
 
