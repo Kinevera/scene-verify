@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Checks the commit subject shape from AGENTS.md (git workflow), the same rule as SceneForge's:
+#   <type>(<scope>)[!]: <subject>
+# with type in feat|fix|docs|test|chore|ci|refactor|perf|build|style, exactly one kebab-case
+# scope ([a-z0-9]+ words joined by single hyphens; no '.', '_', '/' or comma-separated scopes),
+# an optional '!' after the scope for a breaking change, and a lowercase imperative subject.
+# Review-finding IDs may follow the subject in brackets and do not count toward the
+# 100-character subject limit. The hook exempts subjects that begin as git writes them,
+# matched as a prefix, with these thirteen prefixes:
+#   Merge branch , Merge branches , Merge pull request , Merge remote-tracking branch ,
+#   Merge remote-tracking branches , Merge tag , Merge tags , Merge commit ',
+#   Revert " (git writes Revert "<subject>"), Reapply " (git writes Reapply "<subject>" when
+#   reverting a revert), fixup! , squash! , amend! .
+# Anything else starting with Merge, Revert, or Reapply must follow the grammar.
+# Installed by scripts/setup-dev.sh via core.hooksPath; scripts/test-githooks.sh is its battery.
+set -euo pipefail
+
+message_file="$1"
+subject="$(grep -m1 -v -e '^#' -e '^[[:space:]]*$' "$message_file" || true)"
+
+case "$subject" in
+  "Merge branch "*|"Merge branches "*|"Merge pull request "*) exit 0 ;;
+  "Merge remote-tracking branch "*|"Merge remote-tracking branches "*) exit 0 ;;
+  "Merge tag "*|"Merge tags "*|"Merge commit '"*) exit 0 ;;
+  "Revert \""*|"Reapply \""*|"fixup! "*|"squash! "*|"amend! "*) exit 0 ;;
+  "") echo "commit-msg: empty commit message" >&2; exit 1 ;;
+esac
+
+types='feat|fix|docs|test|chore|ci|refactor|perf|build|style'
+if ! printf '%s\n' "$subject" | grep -Eq "^(${types})\([a-z0-9]+(-[a-z0-9]+)*\)!?: [a-z0-9\`'\"]"; then
+  echo "commit-msg: subject must be '<type>(<scope>): <lowercase imperative subject>' (or '<type>(<scope>)!: ...' for a breaking change) with type ${types//|/, } and exactly one kebab-case scope." >&2
+  echo "commit-msg: got: $subject" >&2
+  exit 1
+fi
+
+measured="$(printf '%s' "$subject" | sed -E 's/ \[[^][]+\]$//')"
+if [ "${#measured}" -gt 100 ]; then
+  echo "commit-msg: subject is ${#measured} characters before any [finding IDs]; keep it to 100." >&2
+  echo "commit-msg: got: $subject" >&2
+  exit 1
+fi

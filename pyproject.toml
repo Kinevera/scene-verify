@@ -1,0 +1,92 @@
+# The uv workspace root. It is virtual: it is not a distribution and is never built. It holds
+# the two distributions released together under one tag (scene-verify-0001), the dev
+# dependency group and the tool configuration they share.
+#   packages/contract  scene-verify-contract (import scene_verify_contract), stdlib only
+#   packages/engine    scene-verify (import scene_verify), the verifier engine and its runner
+
+[tool.uv]
+required-version = ">=0.12.17"
+
+[tool.uv.workspace]
+members = ["packages/contract", "packages/engine"]
+
+[dependency-groups]
+dev = [
+  # The two workspace members, installed editable into the dev environment.
+  "scene-verify",
+  "scene-verify-contract",
+  "mypy~=2.3.1",
+  "pip-audit~=2.10.1",
+  "pytest~=9.0.0",
+  "ruff~=0.16.9",
+  # The tests open real USD stages; Isaac Sim provides pxr at runtime instead.
+  "usd-core~=25.11",
+  "types-PyYAML~=6.0",
+]
+
+[tool.uv.sources]
+scene-verify = { workspace = true }
+scene-verify-contract = { workspace = true }
+
+[tool.ruff]
+# The lowest Python either distribution supports (Isaac Sim 5.1 and RoboEval run 3.11).
+target-version = "py311"
+line-length = 100
+src = ["packages/contract/src", "packages/engine/src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "I",
+  "UP",
+  "B",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["scene_verify", "scene_verify_contract"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Tests that need Isaac Sim and its Python are marked requires_isaac and deselected here; run
+# them on an Isaac Sim worker with `pytest -m requires_isaac`.
+addopts = "--strict-markers -m 'not requires_isaac'"
+markers = [
+  "requires_isaac: needs Isaac Sim and its Python (deselected by default)",
+]
+
+[tool.mypy]
+files = ["packages/contract/src", "packages/engine/src", "tests"]
+mypy_path = ["packages/contract/src", "packages/engine/src"]
+# The dev environment's Python (.python-version). numpy's stubs use 3.12 syntax, so mypy cannot
+# check as 3.11; ruff's py311 target keeps 3.12-only syntax out of the code instead.
+python_version = "3.12"
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+# Isaac Sim's modules exist only in Isaac Sim's Python, and usd-core ships pxr without type
+# information; the engine imports all of them inside functions.
+module = ["pxr", "pxr.*", "isaacsim", "isaacsim.*", "omni", "omni.*", "carb", "carb.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# trimesh's annotations type most results as its Geometry base class (concatenate,
+# convex_hull), which the moved engine code and tests use as Trimesh. Read it as untyped
+# rather than cast every call.
+module = ["trimesh", "trimesh.*"]
+follow_imports = "skip"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# The tests moved from RoboEval read report.gate(name) and usd_subtree_to_trimesh(...)
+# results, typed Optional, without narrowing them first; a None there fails the test anyway.
+module = ["test_fidelity_and_authored_interpenetration", "test_scene_verify_soundness"]
+disable_error_code = ["union-attr"]

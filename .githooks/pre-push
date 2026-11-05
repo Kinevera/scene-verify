@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Client-side branch protection and the fast gates, run before every push (AGENTS.md git
+# workflow, scene-verify-0001; adapted from SceneForge's pre-push):
+#   - refuses a direct push to dev or main: those branches only receive merge commits from PRs;
+#   - refuses a non-fast-forward push to any branch, because published history is never
+#     rewritten without a backup branch and a named approval;
+#     SCENE_VERIFY_ALLOW_NON_FF_PUSH=1 lets an approved --force-with-lease through;
+#   - runs `make check` at the repository root (ruff, format, mypy and lock drift over both
+#     packages and the tests) unless SCENE_VERIFY_SKIP_PREPUSH_CHECK=1. The fast gates check the
+#     checked-out working tree, not the pushed commits, so before them the hook:
+#       * lets a push that updates no ref (deletions only, or nothing) through without gates;
+#       * refuses when any pushed ref, peeled to its commit (so an annotated tag counts by the
+#         commit it tags), is not HEAD: only refs at the checked-out commit can be pushed with
+#         the gates, so check that commit out and push from there; a ref that does not peel to
+#         a commit is refused the same way;
+#       * refuses when tracked files have uncommitted changes (staged or unstaged); commit or
+#         stash them first. Untracked files only draw a warning.
+# Either env escape (SCENE_VERIFY_ALLOW_NON_FF_PUSH, SCENE_VERIFY_SKIP_PREPUSH_CHECK) is named
+# in the PR body when used. `git push --no-verify` bypasses this hook entirely; that too is
+# named in the PR body.
+# Installed by scripts/setup-dev.sh via core.hooksPath; scripts/test-githooks.sh is its battery.
+set -euo pipefail
+
+zero="0000000000000000000000000000000000000000"
+repo_root="$(git rev-parse --show-toplevel)"
+head_sha="$(git rev-parse --verify -q HEAD || true)"
+pushes_ref=0
+pushes_other_than_head=""
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "${remote_ref:-}" ] && continue
+  branch="${remote_ref#refs/heads/}"
+  case "$remote_ref" in
+    refs/heads/dev|refs/heads/main)
+      echo "pre-push: refusing direct push to ${branch}. Open a PR into dev; main only receives dev by promotion PR (AGENTS.md git workflow)." >&2
+      exit 1
+      ;;
+  esac
+  if [ "$local_sha" != "$zero" ]; then
+    pushes_ref=1
+    # Peel the pushed object to a commit so an annotated tag at HEAD counts as HEAD; an object
+    # that does not peel counts as not HEAD, so the hook fails closed.
+    local_commit="$(git rev-parse --verify -q "${local_sha}^{commit}" 2>/dev/null || true)"
+    if { [ -z "$local_commit" ] || [ "$local_commit" != "$head_sha" ]; } && [ -z "$pushes_other_than_head" ]; then
+      pushes_other_than_head="$local_ref"
+    fi
+  fi
+  # Branch deletion (local side zero) and branch creation (remote side zero) are fast-forward
+  # by definition.
+  if [ "$local_sha" = "$zero" ] || [ "$remote_sha" = "$zero" ]; then
+    continue
+  fi
+  if ! git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
+    echo "pre-push: the remote tip ${remote_sha:0:12} of ${branch} is not in this checkout; run git fetch and retry." >&2
+    exit 1
+  fi
+  if ! git merge-base --is-ancestor "$remote_sha" "$local_sha"; then
+    if [ "${SCENE_VERIFY_ALLOW_NON_FF_PUSH:-}" = "1" ]; then
+      echo "pre-push: non-fast-forward push to ${branch} allowed by SCENE_VERIFY_ALLOW_NON_FF_PUSH=1." >&2
+    else
+      echo "pre-push: refusing non-fast-forward push to ${branch}: the remote tip ${remote_sha:0:12} is not an ancestor of ${local_sha:0:12}." >&2
+      echo "pre-push: history rewrites need a backup branch, --force-with-lease, and a named approval; then re-run with SCENE_VERIFY_ALLOW_NON_FF_PUSH=1." >&2
+      exit 1
+    fi
+  fi
+done
+
+if [ "${SCENE_VERIFY_SKIP_PREPUSH_CHECK:-}" = "1" ]; then
+  echo "pre-push: fast gates skipped by SCENE_VERIFY_SKIP_PREPUSH_CHECK=1; say so in the PR body." >&2
+  exit 0
+fi
+
+if [ "$pushes_ref" -eq 0 ]; then
+  echo "pre-push: no ref is updated (deletions only or nothing to push); the fast gates are not run." >&2
+  exit 0
+fi
+if [ -n "$pushes_other_than_head" ]; then
+  echo "pre-push: refusing to push ${pushes_other_than_head}: it does not point at the checked-out commit, and the fast gates run on the checked-out working tree, so only refs at HEAD can be pushed with them." >&2
+  echo "pre-push: check out that commit and push from there, or set SCENE_VERIFY_SKIP_PREPUSH_CHECK=1 and name it in the PR body." >&2
+  exit 1
+fi
+
+if [ -n "$(git -C "$repo_root" status --porcelain --untracked-files=no)" ]; then
+  echo "pre-push: refusing to push with uncommitted changes to tracked files: the fast gates check the working tree, not the pushed commits." >&2
+  echo "pre-push: commit or stash them first, or set SCENE_VERIFY_SKIP_PREPUSH_CHECK=1 and name it in the PR body." >&2
+  exit 1
+fi
+if [ -n "$(git -C "$repo_root" ls-files --others --exclude-standard)" ]; then
+  echo "pre-push: warning: untracked files are present; the fast gates may see them though the push does not carry them." >&2
+fi
+
+# A tree without the Makefile cannot run the gates, so `make` fails and the push is refused.
+echo "pre-push: running the fast gates (make check at the repository root)" >&2
+make -C "$repo_root" check

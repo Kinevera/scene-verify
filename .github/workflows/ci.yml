@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  check-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.17"
+          enable-cache: true
+          cache-dependency-path: uv.lock
+
+      - name: Install dependencies from the lockfile
+        # uv reads .python-version (3.12) and fetches that interpreter.
+        run: |
+          make setup
+
+      - name: Fast gates (ruff, format, mypy, lock drift)
+        run: |
+          make check
+
+      - name: Run tests
+        # No GPU and no Isaac Sim: pxr is usd-core, and requires_isaac tests are deselected.
+        run: |
+          make test
+
+      - name: Git hook battery
+        run: |
+          make hooks-check
