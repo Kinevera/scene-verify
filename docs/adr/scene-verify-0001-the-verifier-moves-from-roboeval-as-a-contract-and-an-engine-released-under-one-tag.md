@@ -107,7 +107,7 @@ first field that breaks one by its path, such as `verdict.gates[2].score`:
    `scene_verify/1.`; any other major, such as `scene_verify/2`, is refused.
 3. `scene_id`, `verified_at` and `verifier_version` are present and are non-empty strings.
 4. `verified_at` parses with Python's `datetime.fromisoformat`. That accepts more than a full
-   timestamp: a date alone (`2026-11-05`), a time without a UTC offset, and the basic format
+   timestamp: a date alone (`2026-11-05`), a date and time without a UTC offset, and the basic format
    without separators (`20261105`) all pass.
 5. `overall_status` is present and is one of `pass`, `warn` or `fail`.
 6. `gates` is present and is a non-empty list. Each gate is a JSON object with a `gate` name that
