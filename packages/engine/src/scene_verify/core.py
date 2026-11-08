@@ -39,7 +39,7 @@ from scene_verify_contract import GATE_STATUSES, SCHEMA_VERSION, Bucket, GateSta
 
 #: The release this engine belongs to; it equals both distributions' version and the release tag
 #: (scene-verify-0001), so a verdict names the engine that graded it.
-VERIFIER_VERSION = "0.3.0"
+VERIFIER_VERSION = "0.4.0"
 
 #: GATE_STATUSES runs from least to most severe, so this is pass 0, warn 1, fail 2.
 _STATUS_RANK: dict[str, int] = {status: rank for rank, status in enumerate(GATE_STATUSES)}
@@ -241,9 +241,10 @@ class SceneVerifyReport:
     verified_at: str
     gates: tuple[GateResult, ...]
     verifier_version: str = VERIFIER_VERSION
-    #: sha256 hex of the exact USD stage this verdict grades (single-file bundles only).
+    #: sha256 hex of the exact USD stage bytes this verdict grades (single-file bundles only).
     #: Binds the verdict to the geometry content: a consumer holding the USD can reject a
-    #: verdict produced for different bytes. Optional/additive within scene_verify/1.
+    #: verdict produced for different bytes. Required in every verdict since 0.4.0, so
+    #: :meth:`to_verdict_json` refuses a report that has none.
     usd_sha256: str | None = None
 
     @classmethod
@@ -282,7 +283,15 @@ class SceneVerifyReport:
 
     def to_verdict_json(self) -> dict[str, Any]:
         """Stable ``scene_verify/1`` verdict that any consumer reads (a PackingBench eval,
-        a SceneForge QA gate)."""
+        a SceneForge QA gate).
+
+        Raises ``ValueError`` when the report has no ``usd_sha256``: the contract requires it
+        (scene-verify-0001), so the engine never writes a verdict a consumer would refuse."""
+        if self.usd_sha256 is None:
+            raise ValueError(
+                f"scene {self.scene_id!r} has no usd_sha256; a scene_verify/1 verdict must "
+                "name the sha256 of the stage bytes it graded"
+            )
         verdict: dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,
             "scene_id": self.scene_id,
@@ -291,9 +300,8 @@ class SceneVerifyReport:
             "verifier_version": self.verifier_version,
             "gates": [gate.to_json() for gate in self.gates],
             "bucket_attribution": self.bucket_attribution,
+            "usd_sha256": self.usd_sha256,
         }
-        if self.usd_sha256 is not None:
-            verdict["usd_sha256"] = self.usd_sha256
         return verdict
 
 
@@ -822,6 +830,7 @@ def dump_report(
     Consumer-specific projections (e.g. PackingBench's legacy validation_summary.json) are
     written by that consumer's adapter, not here — the engine stays benchmark-agnostic.
     """
+    verdict = report.to_verdict_json()  # raises before anything is written
     out_dir = scene_verify_out_dir(artifacts_dir, report.scene_id)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -829,7 +838,7 @@ def dump_report(
     evidence_path = out_dir / "evidence.json"
 
     verdict_path.write_text(
-        json.dumps(report.to_verdict_json(), indent=2, sort_keys=False),
+        json.dumps(verdict, indent=2, sort_keys=False),
         encoding="utf-8",
     )
     evidence_path.write_text(

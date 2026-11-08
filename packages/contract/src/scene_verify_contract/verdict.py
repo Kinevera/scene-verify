@@ -16,13 +16,14 @@ reads, such as SceneForge's ``scene_verify`` QA gate. Its shape::
         ...
       ],
       "bucket_attribution": {"<bucket>": ["<gate name>", ...], ...},
-      "usd_sha256": "<64 lowercase hex digits>"   (optional)
+      "usd_sha256": "<64 lowercase hex digits>"
     }
 
 ``overall_status`` is the most severe gate status, and ``bucket_attribution`` lists every gate
-that did not pass under its bucket, in gate order. Fields are additive within the major: a
-verdict that carries keys this module does not know is still accepted, and ``usd_sha256`` is
-one such addition. This module imports only the standard library.
+that did not pass under its bucket, in gate order. ``usd_sha256`` is the SHA-256 of the exact
+file bytes the verifier opened; it is required since 0.4.0 (scene-verify-0001, amendment of
+2026-11-08), so a verdict always names the stage it graded. A verdict that carries keys this
+module does not know is still accepted. This module imports only the standard library.
 """
 
 from __future__ import annotations
@@ -110,9 +111,8 @@ class Verdict:
     verifier_version: str
     gates: tuple[GateVerdict, ...]
     bucket_attribution: Mapping[Bucket, tuple[str, ...]]
-    #: sha256 hex digest of the USD stage the verdict grades; ``None`` when the verdict does
-    #: not bind itself to a stage.
-    usd_sha256: str | None = None
+    #: sha256 hex digest of the exact USD stage bytes the verdict grades.
+    usd_sha256: str
 
 
 def parse_verdict(data: object) -> Verdict:
@@ -123,8 +123,8 @@ def parse_verdict(data: object) -> Verdict:
     ill-typed field, an unknown major in ``schema_version``, an unknown status or bucket, a
     ``verified_at`` that is not ISO 8601, a non-finite score, a repeated gate name, an
     ``overall_status`` that is not the most severe gate status, a ``bucket_attribution`` that
-    does not match the gates, or a ``usd_sha256`` that is not 64 lowercase hex digits. Keys the
-    contract does not define are ignored.
+    does not match the gates, or a missing ``usd_sha256`` or one that is not 64 lowercase hex
+    digits. Keys the contract does not define are ignored.
     """
     root = _mapping(data, "verdict")
 
@@ -176,15 +176,12 @@ def parse_verdict(data: object) -> Verdict:
             f"got {_show(_as_lists(bucket_attribution))}"
         )
 
-    usd_sha256: str | None = None
-    if "usd_sha256" in root:
-        value = root["usd_sha256"]
-        if not isinstance(value, str) or _SHA256_HEX.fullmatch(value) is None:
-            raise VerdictError(
-                "verdict.usd_sha256 must be a sha256 digest of 64 lowercase hex digits, "
-                f"got {_show(value)}"
-            )
-        usd_sha256 = value
+    usd_sha256 = _required(root, "usd_sha256", "verdict")
+    if not isinstance(usd_sha256, str) or _SHA256_HEX.fullmatch(usd_sha256) is None:
+        raise VerdictError(
+            "verdict.usd_sha256 must be a sha256 digest of 64 lowercase hex digits, "
+            f"got {_show(usd_sha256)}"
+        )
 
     return Verdict(
         schema_version=schema_version,

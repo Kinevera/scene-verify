@@ -16,6 +16,7 @@ and RoboEval's PackingBench pin the engine (SceneForge sceneforge-0009, scene-ve
 | --- | --- |
 | `AGENTS.md` | Workflow authority: rules, gates, validation, git, review |
 | `README.md` | What the parts are, how to install and run them, and their status |
+| `CHANGELOG.md` | The release notes: one entry per version, a line for every contract change |
 | `docs/adr/` | Decisions, indexed in `docs/adr/README.md`; an unrecorded decision is not a decision |
 | `docs/` | The verifier's design and measurement notes, moved from RoboEval |
 

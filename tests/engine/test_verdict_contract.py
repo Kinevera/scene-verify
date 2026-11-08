@@ -22,6 +22,10 @@ import scene_verify_contract
 from scene_verify import core as sv
 from scene_verify_contract import parse_verdict
 
+#: A stand-in stage digest; the runner hashes the real file
+#: (tests/engine/test_usd_bundle_runner.py).
+USD_SHA256 = "cd" * 32
+
 
 def _evidence(*, static_tag: bool, phantom_m: float):
     return sv.CapturedSceneEvidence(
@@ -66,6 +70,7 @@ def _verdict(*, static_tag: bool, phantom_m: float) -> dict:
         captured=_evidence(static_tag=static_tag, phantom_m=phantom_m),
         config=cfg,
         verified_at="2026-06-29T00:00:00+00:00",
+        usd_sha256=USD_SHA256,
     )
     return report.to_verdict_json()
 
@@ -148,7 +153,7 @@ def _scenarios() -> dict[str, tuple[sv.CapturedSceneEvidence, dict[str, Any]]]:
     )
     return {
         "pass": (clean, {}),
-        "pass bound to a usd": (clean, {"usd_sha256": "ab" * 32}),
+        "pass bound to another usd": (clean, {"usd_sha256": "ab" * 32}),
         "warn mesh": (_evidence(static_tag=True, phantom_m=warn_phantom), {}),
         "fail static metadata": (_evidence(static_tag=False, phantom_m=0.001), {}),
         "fail mesh": (_evidence(static_tag=True, phantom_m=0.05), {}),
@@ -200,7 +205,7 @@ def test_every_engine_verdict_passes_the_contract_validator(scenario: str, tmp_p
         captured=captured,
         config=sv.load_verify_thresholds(None),
         verified_at="2026-10-17T10:00:00+00:00",
-        **extra,
+        **{"usd_sha256": USD_SHA256, **extra},
     )
     # Each scenario is named for the overall status it yields.
     assert report.overall_status == scenario.split()[0]
@@ -213,7 +218,8 @@ def test_every_engine_verdict_passes_the_contract_validator(scenario: str, tmp_p
     assert dict(parsed.bucket_attribution) == {
         bucket: tuple(names) for bucket, names in report.bucket_attribution.items()
     }
-    assert parsed.usd_sha256 == extra.get("usd_sha256")
+    assert parsed.usd_sha256 == extra.get("usd_sha256", USD_SHA256)
+    assert verdict["usd_sha256"] == parsed.usd_sha256
 
     # A consumer reads the verdict.json the runner writes, so the file must validate too.
     paths = sv.dump_report(report=report, captured=captured, artifacts_dir=tmp_path)
@@ -232,3 +238,20 @@ def test_the_scenarios_cover_every_status():
         )
         statuses.add(report.overall_status)
     assert statuses == {"pass", "warn", "fail"}
+
+
+def test_the_engine_refuses_to_write_a_verdict_without_a_stage_digest(tmp_path):
+    # usd_sha256 is required by the contract since 0.4.0, so the engine never writes a verdict
+    # the contract would refuse.
+    captured = _evidence(static_tag=True, phantom_m=0.001)
+    report = sv.evaluate_scene_verify(
+        scene_id="unbound",
+        captured=captured,
+        config=sv.load_verify_thresholds(None),
+        verified_at="2026-11-08T10:00:00+00:00",
+    )
+    with pytest.raises(ValueError, match="usd_sha256"):
+        report.to_verdict_json()
+    with pytest.raises(ValueError, match="usd_sha256"):
+        sv.dump_report(report=report, captured=captured, artifacts_dir=tmp_path)
+    assert not (tmp_path / "scene_verify" / "unbound" / "verdict.json").exists()
