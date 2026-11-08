@@ -6,7 +6,9 @@ one version:
 - **The contract**, `packages/contract`: distribution `scene-verify-contract`, import
   `scene_verify_contract`. The `scene_verify/1` verdict: its schema version and accepted-major
   rule, gate statuses, buckets and typed structures, and `parse_verdict`, which validates a
-  received verdict and raises `VerdictError` naming the offending field. Standard library only.
+  received verdict and raises `VerdictError` naming the offending field. Every verdict carries
+  `usd_sha256`, the SHA-256 of the exact USD file bytes the verifier opened, required since
+  0.4.0. Standard library only.
 - **The engine**, `packages/engine`: distribution `scene-verify`, import `scene_verify`. The
   geometry and Isaac Sim checks that grade a USD scene and write a verdict, and the generic runner
   `scene_verify.runners.usd_bundle`. It depends on the contract at the same version and on numpy,
@@ -21,27 +23,42 @@ from RoboEval's `feat/scene-verify-fidelity` branch at ffda3a96 under SceneForge
 
 ## Status
 
-Built, not released: no tag exists yet, and the first release is to be v0.3.0. The tests run
-without Isaac Sim (they stub it). The runner moved unchanged from its Isaac Sim 5.1 form and has
-not run on Isaac Sim 6.2.
+Built. v0.3.0 is tagged locally on `main` but not yet pushed, and no GitHub release exists;
+0.4.0, which makes `usd_sha256` required (`CHANGELOG.md`), is built on `dev` and not tagged.
+The tests run without Isaac Sim (they stub it). The runner moved unchanged from its Isaac Sim
+5.1 form and has not run on Isaac Sim 6.2.
 
 ## Install by tag
 
-Both parts require Python 3.11 or later. The repository is private, so installing needs a read
-credential for it, such as a read-only deploy key or a fine-grained token.
+Both parts require Python 3.11 or later. The repository is to become public (scene-verify-0001,
+amendment of 2026-11-08); once it is, installing needs no credential. Until then it is private,
+and installing needs a read credential for it, such as a read-only deploy key or a fine-grained
+token.
 
 The contract alone:
 
 ```
-scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.3.0#subdirectory=packages/contract
+scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/contract
 ```
 
-The engine requires `scene-verify-contract==0.3.0`, which is on no package index, so name both:
+The engine pins `scene-verify-contract==0.4.0` with no source. No package index carries that
+distribution, and one that later did could satisfy the bare pin, so name both from this
+repository at the same tag:
 
 ```
-scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.3.0#subdirectory=packages/contract
-scene-verify @ git+https://github.com/Kinevera/scene-verify@v0.3.0#subdirectory=packages/engine
+scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/contract
+scene-verify @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/engine
 ```
+
+With pip, the same two requirements in one command:
+
+```
+pip install \
+  "scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/contract" \
+  "scene-verify @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/engine"
+```
+
+The tag in these lines is the release being pinned; both lines name the same one.
 
 Validate a verdict with the contract:
 
