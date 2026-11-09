@@ -470,16 +470,123 @@ def _degenerate(mesh: trimesh.Trimesh | None) -> bool:
     )
 
 
+#: Most (point, triangle) pairs one exact closest-point batch evaluates. Each pair costs a few
+#: hundred bytes of numpy temporaries, so a batch stays near 100 MB however large the mesh is.
+_CLOSEST_POINT_PAIR_BATCH = 200_000
+
+#: Query points sent to the centroid trees at once.
+_CLOSEST_POINT_QUERY_CHUNK = 256
+
+
+def _closest_point_bounded(
+    mesh: trimesh.Trimesh, points: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Exact closest point on ``mesh`` for each point, in bounded memory.
+
+    Returns ``(closest, distance, triangle_id)`` with the result
+    ``trimesh.proximity.closest_point_naive`` gives, ties going to the lowest triangle index as
+    its ``argmin`` does, without its points x triangles intermediate (about 66 bytes a pair: a
+    2,000-point query on a 2.4M-face mesh asked for over 300 GB). It needs only numpy, scipy and
+    trimesh, so it runs where rtree and embree are absent (the dev venv and Isaac Sim's python).
+
+    Triangles are grouped by their radius about their centroid (the farthest vertex), within a
+    factor of two, with one ``cKDTree`` of centroids per group. Any triangle's distance bounds
+    a point's answer ``d``; every triangle within ``d`` of the point has its centroid within
+    ``d + r`` of it, ``r`` its group's largest radius, so a ball query per group returns a
+    candidate set holding every closest triangle. Candidates are evaluated exactly in batches
+    of at most ``_CLOSEST_POINT_PAIR_BATCH`` pairs.
+    """
+    from scipy.spatial import cKDTree  # type: ignore[import-untyped]  # scipy ships no stubs
+
+    points = np.asarray(points, dtype=np.float64).reshape(-1, 3)
+    triangles = np.asarray(mesh.triangles, dtype=np.float64)
+    n_points = len(points)
+    best_d2 = np.full(n_points, np.inf)
+    best_tid = np.full(n_points, np.iinfo(np.int64).max, dtype=np.int64)
+    best_close = np.zeros((n_points, 3))
+    if n_points == 0:
+        return best_close, np.zeros(0), np.zeros(0, dtype=np.int64)
+
+    centroids = triangles.mean(axis=1)
+    radius = np.sqrt(
+        np.max([((triangles[:, j] - centroids) ** 2).sum(axis=1) for j in range(3)], axis=0)
+    )
+    positive = radius[radius > 0.0]
+    floor = float(positive.min()) if len(positive) else 1.0
+    group_key = np.ceil(np.log2(np.maximum(radius, floor) / floor)).astype(np.int64)
+    groups: list[tuple[np.ndarray, Any, float]] = []
+    for key in np.unique(group_key):
+        face_ids = np.flatnonzero(group_key == key)
+        groups.append((face_ids, cKDTree(centroids[face_ids]), float(radius[face_ids].max())))
+
+    def evaluate(point_ids: np.ndarray, face_ids: np.ndarray) -> None:
+        """Fold exact distances for the given pairs into the running best per point."""
+        for start in range(0, len(point_ids), _CLOSEST_POINT_PAIR_BATCH):
+            pid = point_ids[start : start + _CLOSEST_POINT_PAIR_BATCH]
+            fid = face_ids[start : start + _CLOSEST_POINT_PAIR_BATCH]
+            close = trimesh.triangles.closest_point(triangles[fid], points[pid])
+            d2 = ((points[pid] - close) ** 2).sum(axis=1)
+            # Per point, the smallest squared distance, ties to the lowest triangle index.
+            order = np.lexsort((fid, d2, pid))
+            pid, fid, d2, close = pid[order], fid[order], d2[order], close[order]
+            first = np.ones(len(pid), dtype=bool)
+            first[1:] = pid[1:] != pid[:-1]
+            pid, fid, d2, close = pid[first], fid[first], d2[first], close[first]
+            better = (d2 < best_d2[pid]) | ((d2 == best_d2[pid]) & (fid < best_tid[pid]))
+            pid, fid, d2, close = pid[better], fid[better], d2[better], close[better]
+            best_d2[pid] = d2
+            best_tid[pid] = fid
+            best_close[pid] = close
+
+    for start in range(0, n_points, _CLOSEST_POINT_QUERY_CHUNK):
+        chunk = np.arange(start, min(start + _CLOSEST_POINT_QUERY_CHUNK, n_points))
+        # An upper bound per point: the exact distance to the faces of each group's few nearest
+        # centroids (more than one, so a degenerate face whose distance is NaN cannot leave a
+        # point without a finite bound).
+        seed_pids, seed_fids = [], []
+        for face_ids, tree, _ in groups:
+            k = min(4, len(face_ids))
+            _, nearest = tree.query(points[chunk], k=k)
+            nearest = np.asarray(nearest, dtype=np.int64).reshape(len(chunk), k)
+            seed_pids.append(np.repeat(chunk, k))
+            seed_fids.append(face_ids[nearest.ravel()])
+        evaluate(np.concatenate(seed_pids), np.concatenate(seed_fids))
+        bound = np.sqrt(best_d2[chunk])
+        # Every face that can be at least as close as the bound, group by group.
+        for face_ids, tree, group_radius in groups:
+            reach = (bound + group_radius) * (1.0 + 1e-9) + 1e-12
+            counts = tree.query_ball_point(points[chunk], reach, return_length=True)
+            sub_start = 0
+            while sub_start < len(chunk):
+                # Points whose candidates together fit one batch (at least one point).
+                total = np.cumsum(counts[sub_start:])
+                sub_end = sub_start + max(1, int(np.searchsorted(total, _CLOSEST_POINT_PAIR_BATCH)))
+                sub = chunk[sub_start:sub_end]
+                hits = tree.query_ball_point(
+                    points[sub], reach[sub_start:sub_end], return_sorted=False
+                )
+                lengths = np.fromiter((len(h) for h in hits), dtype=np.int64, count=len(hits))
+                if lengths.sum():
+                    local = np.fromiter(
+                        (i for h in hits for i in h), dtype=np.int64, count=int(lengths.sum())
+                    )
+                    evaluate(np.repeat(sub, lengths), face_ids[local])
+                sub_start = sub_end
+
+    return best_close, np.sqrt(best_d2), best_tid
+
+
 def _signed_distance_inside_positive(mesh: trimesh.Trimesh, points: np.ndarray) -> np.ndarray:
     """Signed distance (positive inside) without rtree/embree.
 
     ``trimesh.proximity.signed_distance`` relies on a ray engine (rtree) that is absent
-    in both the project venv and the Isaac python. We instead use the brute-force closest
-    point and decide the sign from the nearest face normal: a point on the outward side of
-    its closest surface triangle is outside (negative). Robust for the convex collision
-    hulls and box-like meshes this check targets; portable across both pythons.
+    in both the project venv and the Isaac python. We instead find the exact closest point
+    (:func:`_closest_point_bounded`, bounded memory) and decide the sign from the nearest face
+    normal: a point on the outward side of its closest surface triangle is outside (negative).
+    Robust for the convex collision hulls and box-like meshes this check targets; portable
+    across both pythons.
     """
-    closest, distance, triangle_id = trimesh.proximity.closest_point_naive(mesh, points)
+    closest, distance, triangle_id = _closest_point_bounded(mesh, points)
     normals = mesh.face_normals[triangle_id]
     outward = np.einsum("ij,ij->i", points - closest, normals) > 0.0
     return np.where(outward, -distance, distance)

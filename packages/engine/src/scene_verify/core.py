@@ -39,7 +39,7 @@ from scene_verify_contract import GATE_STATUSES, SCHEMA_VERSION, Bucket, GateSta
 
 #: The release this engine belongs to; it equals both distributions' version and the release tag
 #: (scene-verify-0001), so a verdict names the engine that graded it.
-VERIFIER_VERSION = "0.4.0"
+VERIFIER_VERSION = "0.4.1"
 
 #: GATE_STATUSES runs from least to most severe, so this is pass 0, warn 1, fail 2.
 _STATUS_RANK: dict[str, int] = {status: rank for rank, status in enumerate(GATE_STATUSES)}
