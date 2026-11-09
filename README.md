@@ -25,8 +25,10 @@ from RoboEval's `feat/scene-verify-fidelity` branch at ffda3a96 under SceneForge
 
 Built. v0.3.0 is tagged locally on `main` but not yet pushed, and no GitHub release exists;
 0.4.0, which makes `usd_sha256` required (`CHANGELOG.md`), is built on `dev` and not tagged.
-The tests run without Isaac Sim (they stub it). The runner moved unchanged from its Isaac Sim
-5.1 form and has not run on Isaac Sim 6.2.
+The tests run without Isaac Sim (they stub it). On 2026-11-08 the 0.3.0 runner ran on Isaac Sim
+6.2.0 (NVIDIA's NGC image) on the SceneForge rig against a real pipeline package, installed with
+`pip install --no-deps` because the image bundles numpy, scipy, trimesh and PyYAML. The verdict
+was warn (`visual_collision_agreement` warned; the five other gates passed; SceneForge #28).
 
 ## Install by tag
 
