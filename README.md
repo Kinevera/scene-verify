@@ -1,58 +1,51 @@
 # scene-verify
 
-The scene verifier for Cybernetic simulator scenes. It holds two parts, released together under
-one version:
+Physics checks for simulator scenes. scene-verify opens a USD scene in NVIDIA Isaac Sim, runs a
+set of checks on it, and writes a **verdict**: `pass`, `warn` or `fail`. The verdict names each
+check's result and the SHA-256 of the exact file it graded.
 
-- **The contract**, `packages/contract`: distribution `scene-verify-contract`, import
-  `scene_verify_contract`. The `scene_verify/1` verdict: its schema version and accepted-major
-  rule, gate statuses, buckets and typed structures, and `parse_verdict`, which validates a
-  received verdict and raises `VerdictError` naming the offending field. Every verdict carries
-  `usd_sha256`, the SHA-256 of the exact USD file bytes the verifier opened, required since
-  0.4.0. Standard library only.
-- **The engine**, `packages/engine`: distribution `scene-verify`, import `scene_verify`. The
-  geometry and Isaac Sim checks that grade a USD scene and write a verdict, and the generic runner
-  `scene_verify.runners.usd_bundle`. It depends on the contract at the same version and on numpy,
-  trimesh (below 5, the major version its numbers were evidenced on), PyYAML and scipy (which
-  trimesh needs for the convex-hull collision proxy); `pxr`, `isaacsim`, `omni` and `carb` come
-  from the Isaac Sim runtime.
+Cybernetic uses it to check every scene its SceneForge pipeline reconstructs from captures before
+that scene is approved for robot simulation and evaluation.
 
-SceneForge's API pins the contract only; SceneForge's verify stage worker and RoboEval's
-PackingBench pin the engine (scene-verify-0001, SceneForge sceneforge-0009). The code moved here
-from RoboEval's `feat/scene-verify-fidelity` branch at ffda3a96 under SceneForge issue #87;
-`docs/history/` keeps that branch's design and measurement notes, which name RoboEval's paths.
+## The checks
+
+| Check | What it asks |
+| --- | --- |
+| `scene_load` | Does the stage open, and do the declared objects exist? |
+| `visual_collision_agreement` | Do the visual mesh and the collision mesh match? |
+| `interpenetration` | Do objects overlap at the start and after settling? |
+| `static_settle` | Does the scene stay still when physics runs (60 steps by default)? |
+| `fall_through` | Does anything fall through the support surface? |
+| `static_metadata_present` | Are the objects that should be static tagged as static? |
+| `recon_registration_coverage` | For a reconstruction: were enough capture frames used? |
+| `recon_surface_density` | For a reconstruction: does the surface have enough detail? |
+
+The last two run only when the input declares the scene a reconstruction. Each check's limits
+are in `packages/engine/src/scene_verify/thresholds.yaml`, and `--thresholds` overrides them.
+The overall verdict is the worst result of any check.
+
+## Two packages, one version
+
+- **Contract** (`packages/contract`, distribution `scene-verify-contract`, import
+  `scene_verify_contract`): the `scene_verify/1` verdict format and `parse_verdict`, which
+  validates a verdict and raises `VerdictError` naming the bad field. It uses the standard
+  library only, so a service that only reads verdicts installs this part alone.
+- **Engine** (`packages/engine`, distribution `scene-verify`, import `scene_verify`): the
+  checks and the runner. It needs numpy, scipy, trimesh (below 5) and PyYAML. `pxr`, `isaacsim`,
+  `omni` and `carb` come from Isaac Sim.
 
 ## Status
 
-Built. v0.3.0 is tagged locally on `main` but not yet pushed, and no GitHub release exists;
-0.4.0, which makes `usd_sha256` required (`CHANGELOG.md`), is built on `dev` and not tagged.
-The tests run without Isaac Sim (they stub it). On 2026-11-08 the 0.3.0 runner ran on Isaac Sim
-6.2.0 (NVIDIA's NGC image) on the SceneForge rig against a real pipeline package, installed with
-`pip install --no-deps` because the image bundles numpy, scipy, trimesh and PyYAML. The verdict
-was warn (`visual_collision_agreement` warned; the five other gates passed; SceneForge #28).
+Version **0.4.0** is tagged. Since 0.4.0 every verdict must carry `usd_sha256`, the SHA-256 of
+the exact file the verifier opened (`CHANGELOG.md`).
 
-## Install by tag
+Built for Isaac Sim 5.1. On 2026-11-08 it also ran on Isaac Sim 6.2.0, in NVIDIA's NGC
+container, against a real reconstructed scene; the verdict was `warn`, from
+`visual_collision_agreement`. The test suite runs without Isaac Sim, which it stubs.
 
-Both parts require Python 3.11 or later. The repository is to become public (scene-verify-0001,
-amendment of 2026-11-08); once it is, installing needs no credential. Until then it is private,
-and installing needs a read credential for it, such as a read-only deploy key or a fine-grained
-token.
+## Install
 
-The contract alone:
-
-```
-scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/contract
-```
-
-The engine pins `scene-verify-contract==0.4.0` with no source. No package index carries that
-distribution, and one that later did could satisfy the bare pin, so name both from this
-repository at the same tag:
-
-```
-scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/contract
-scene-verify @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/engine
-```
-
-With pip, the same two requirements in one command:
+Python 3.11 or later. Both packages install from this repository by tag:
 
 ```
 pip install \
@@ -60,41 +53,66 @@ pip install \
   "scene-verify @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/engine"
 ```
 
-The tag in these lines is the release being pinned; both lines name the same one.
+Name both packages. The engine pins `scene-verify-contract==0.4.0`, and no package index
+carries it, so a bare pin could resolve to someone else's package.
 
-Validate a verdict with the contract:
+Isaac Sim 6.2 already ships numpy, scipy, trimesh and PyYAML, so inside its Python add
+`--no-deps`:
 
-```python
-from scene_verify_contract import VerdictError, parse_verdict
-
-verdict = parse_verdict(json.loads(text))  # raises VerdictError on a malformed verdict
+```
+/isaac-sim/python.sh -m pip install --no-deps \
+  "scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/contract" \
+  "scene-verify @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/engine"
 ```
 
-## Run the runner under Isaac Sim's Python
+## Run
 
-Install the two requirements above into Isaac Sim's Python, then:
+Describe the scene in a bundle file:
+
+```json
+{
+  "scene_id": "kitchen-001",
+  "usd_stage_path": "/data/scene.usdz",
+  "objects": [
+    {"object_id": "static_shell", "prim_path": "/World/StaticShell", "is_static_expected": true}
+  ],
+  "support_prim_path": "/World/StaticShell"
+}
+```
+
+Then run it with Isaac Sim's Python:
 
 ```
 <isaac-sim>/python.sh -m scene_verify.runners.usd_bundle \
-    --bundle scene_bundle.json --artifacts-dir artifacts --emit-sidecar
+    --bundle scene_bundle.json --artifacts-dir artifacts
 ```
 
-The bundle is a `SceneBundle` JSON (`scene_verify/bundle.py`): the USD stage, the prims to grade
-and the support prim. The run writes `verdict.json` and `evidence.json` under
-`<artifacts-dir>/scene_verify/<scene_id>/`, and `--emit-sidecar` also writes `scene_verify.json`
-beside the USD. A relative path resolves against the working directory. `--thresholds` and
-`--settle-steps` override the shipped thresholds. It exits 0 on pass or warn, 2 on fail and 1 on
-error, and prints `SCENE_VERIFY_RESULT scene_id=<id> overall_status=<status>`, which a caller
-should read instead of the exit code where Isaac Sim's `python.sh` collapses non-zero codes to 1.
+The runner writes `verdict.json` and `evidence.json` under
+`artifacts/scene_verify/<scene_id>/`. It exits 0 on pass or warn, 2 on fail and 1 on error.
+Isaac Sim's `python.sh` turns every non-zero exit into 1, so read `verdict.json` for the result.
+The full bundle format is in `packages/engine/src/scene_verify/bundle.py`.
+
+## Read a verdict
+
+```python
+import json
+from scene_verify_contract import VerdictError, parse_verdict
+
+verdict = parse_verdict(json.loads(text))  # raises VerdictError on a malformed verdict
+print(verdict.overall_status, verdict.usd_sha256)
+```
 
 ## Develop
 
 ```
-scripts/setup-dev.sh          # git hooks and .venv from uv.lock (uv fetches Python 3.12)
-scripts/setup-dev.sh --check  # verify the setup without changing anything
-make check                    # ruff check, ruff format --check, mypy, uv lock --check
-make test                     # pytest; no GPU or Isaac Sim (pxr is usd-core)
-make hooks-check              # the git hook battery
+scripts/setup-dev.sh          # git hooks and .venv from uv.lock
+make check                    # ruff, format, mypy, lock check
+make test                     # pytest; no GPU or Isaac Sim needed
 ```
 
-`AGENTS.md` holds the workflow; `docs/adr/` holds the decisions.
+`AGENTS.md` holds the contribution workflow, and `docs/adr/` holds the design decisions.
+`docs/history/` keeps older design and measurement notes from before the code moved here.
+
+## License
+
+No license has been chosen yet. Until one is added, all rights are reserved.
