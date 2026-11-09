@@ -1,6 +1,6 @@
 [project]
 name = "scene-verify-contract"
-version = "0.4.0"
+version = "0.4.1"
 description = "The scene_verify/1 verdict contract: its constants, typed structures and validator, standard library only"
 requires-python = ">=3.11"
 license = { text = "Proprietary" }
