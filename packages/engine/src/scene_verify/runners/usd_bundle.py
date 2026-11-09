@@ -30,6 +30,7 @@ exactly the artifact a SceneForge packaging worker promotes into its QA report s
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -66,6 +67,10 @@ def _resolve_usd_path(usd_stage_path: str) -> str:
     if not path.is_absolute():
         path = (Path.cwd() / path).resolve()
     return str(path)
+
+
+def _sha256_of(path: str) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def build_generic_scene(*, bundle, usd_path: str, config):
@@ -178,6 +183,9 @@ def run(args: argparse.Namespace) -> int:
 
     usd_path = _resolve_usd_path(bundle.usd_stage_path)
     verified_at = datetime.now(UTC).isoformat()
+    # usd_sha256 names the bytes the verifier opened: hash the file before the stage is opened,
+    # and refuse the verdict below if the bytes differ once grading is done.
+    usd_sha256 = _sha256_of(usd_path)
     stage, world, objects_meta, support_prim_path = build_generic_scene(
         bundle=bundle, usd_path=usd_path, config=config
     )
@@ -219,9 +227,10 @@ def run(args: argparse.Namespace) -> int:
             },
         )
         print(f"[verify-usd] reconstruction fidelity evidence: {measured}", flush=True)
-    import hashlib
-
-    usd_sha256 = hashlib.sha256(Path(usd_path).read_bytes()).hexdigest()
+    if _sha256_of(usd_path) != usd_sha256:
+        raise RuntimeError(
+            f"USD stage {usd_path} changed while it was verified; no verdict is written"
+        )
     report = sv.evaluate_scene_verify(
         scene_id=bundle.scene_id,
         captured=captured,

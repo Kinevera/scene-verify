@@ -1,6 +1,7 @@
 # scene-verify-0001: The verifier moves from RoboEval as a contract and an engine released under one tag
 
-- **Status:** Accepted; amended 2026-11-05 (the validator's rules)
+- **Status:** Accepted; amended 2026-11-05 (the validator's rules) and 2026-11-08
+  (`usd_sha256` required, the repository to become public)
 - **Date:** 2026-10-17
 - **Scope:** What moves from RoboEval into this repository, how it is packaged, versioned and
   pinned, how its history moves, and how the repository is set up and receives changes
@@ -136,13 +137,54 @@ will therefore refuse some verdicts its gate passes today; the change is in the 
 direction. Verdicts the engine writes are unaffected: it writes `usd_sha256` as a lowercase hex
 digest and omits the key when it has no stage digest.
 
+### Amendment (2026-11-08): `usd_sha256` is required, and the repository is to become public
+
+On 2026-11-08 the maintainer ruled, for SceneForge #28, that every verdict names the stage it
+graded, and that this repository becomes public.
+
+1. **`usd_sha256` is required (replaces rule 11 above).** `parse_verdict` refuses a verdict
+   without `usd_sha256` (`verdict is missing 'usd_sha256'`). Its value is a string of exactly
+   64 lowercase hex characters, the SHA-256 of the exact file bytes the verifier opened; null,
+   an empty string, uppercase hex, non-hex characters, any other length or surrounding
+   whitespace is refused. The typed `Verdict.usd_sha256` is a `str` and no longer defaults to
+   `None`.
+2. **The engine always writes it and hashes the bytes it opens.** The runner
+   (`scene_verify.runners.usd_bundle`) hashes the USD file before it opens the stage, hashes it
+   again once grading is done, and raises without writing a verdict, evidence or sidecar when
+   the two differ. `SceneVerifyReport.to_verdict_json()`, and so `dump_report`, raises
+   `ValueError` for a report that has no `usd_sha256`, so the engine never writes a verdict the
+   contract refuses.
+3. **The schema stays `scene_verify/1`.** The accepted-major rule (rule 2) protects readers: a
+   reader of `scene_verify/1` must be able to read every `scene_verify/1` verdict. Requiring a
+   field that was already defined, with the same meaning and format, keeps that promise: every
+   0.3.0 reader accepts every 0.4.0 verdict. What the change refuses is a producer's verdict that
+   omits the key, and the only producer, this engine's runner, has written it on every verdict
+   since the move. No record here defines a major as a stricter validator, and a
+   `scene_verify/2` would make every 0.3.0 reader, SceneForge's included, refuse verdicts it
+   reads correctly today. The change is in the fail-closed direction, as the amendment of
+   2026-11-05 described for SceneForge's adoption of `parse_verdict`. A change that alters an
+   existing field's meaning or format, or removes one, still needs a new major.
+4. **Version 0.4.0.** Both distributions and `VERIFIER_VERSION` move to 0.4.0, a minor bump:
+   the engine's public `to_verdict_json()` now raises where it omitted a key, and the contract
+   refuses verdicts it accepted. The engine pins `scene-verify-contract==0.4.0`. The change is
+   listed in `CHANGELOG.md`, which holds the release notes the GitHub release copies.
+5. **The repository is to become public (reverses Q2).** The visibility change is a settings
+   change the maintainer makes; until it is made, installing still needs a read credential.
+   Once it is public, a consumer installs both distributions from git by tag with a
+   subdirectory and no credential, as `README.md` shows, and the Q2 consequence that every
+   consumer's CI and image builds need a read credential falls away. The engine's exact pin
+   `scene-verify-contract==0.4.0` names no source, and no such distribution is on a package
+   index, but a package of that name published there later could satisfy it; a consumer names
+   the contract's git URL beside the engine's, so the resolver takes the contract from this
+   repository.
+
 ## Consequences
 
 - SceneForge and RoboEval adopt a verifier change by moving their pin; a change to the verdict
   shape or to the validator's rules is a contract change that SceneForge sees as a version bump
   in its lock.
-- Pinning needs a read credential in every consumer's CI and image builds, because the repository
-  is private.
+- Pinning needs a read credential in every consumer's CI and image builds while the repository
+  is private; the amendment of 2026-11-08 makes it public, which removes the need.
 - RoboEval's branch keeps its own copy until RoboEval pins the engine and keeps only its adapter
   (SceneForge #87's third item); until then the two copies can drift.
 - The copied RoboEval helpers are now maintained here, apart from RoboEval's originals.
@@ -181,3 +223,5 @@ digest and omits the key when it has no stage digest.
 - RoboEval pins the engine and removes its copy, or decides not to.
 - The runner fails on Isaac Sim 6.2 in SceneForge #28.
 - A third consumer needs the engine without numpy, trimesh or PyYAML.
+- A producer needs to write a verdict for a scene that is not one USD file, so it has no single
+  file to hash, which reopens the amendment of 2026-11-08 (item 1).

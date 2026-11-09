@@ -1,6 +1,6 @@
 [project]
 name = "scene-verify"
-version = "0.3.0"
+version = "0.4.0"
 description = "The scene verifier engine: grades a USD scene's geometry and physics and writes a scene_verify/1 verdict"
 requires-python = ">=3.11"
 license = { text = "Proprietary" }
@@ -12,7 +12,7 @@ authors = [{ name = "Cybernetic" }]
 # only; lifting the cap needs a run showing the verdicts unchanged (scene-verify-0001, Q7).
 # pxr, isaacsim, omni and carb come from the runtime the engine runs in and are not declared.
 dependencies = [
-  "scene-verify-contract==0.3.0",
+  "scene-verify-contract==0.4.0",
   "numpy>=1.26",
   "trimesh>=4.5,<5",
   "PyYAML>=6.0",
