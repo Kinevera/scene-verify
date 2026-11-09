@@ -276,6 +276,25 @@ def test_run_writes_a_valid_verdict_bound_to_the_usd(scene, capsys):
     assert "SCENE_VERIFY_RESULT scene_id=runner_scene overall_status=pass" in out
 
 
+def test_run_refuses_a_verdict_when_the_usd_changes_while_it_is_graded(scene, monkeypatch):
+    # usd_sha256 must name the bytes the verifier opened: the runner hashes the file before it
+    # opens the stage and refuses to write a verdict if the bytes differ after grading.
+    import scene_verify.capture as capture
+
+    original = capture.capture_scene_evidence
+
+    def rewrite_then_capture(**kwargs: Any):
+        with scene["usd"].open("a", encoding="utf-8") as handle:
+            handle.write("\n# rewritten while graded\n")
+        return original(**kwargs)
+
+    monkeypatch.setattr(capture, "capture_scene_evidence", rewrite_then_capture)
+    with pytest.raises(RuntimeError, match="changed while it was verified"):
+        _run(scene, "--emit-sidecar")
+    assert not (scene["tmp"] / "artifacts" / "scene_verify" / "runner_scene").exists()
+    assert not (scene["usd"].parent / "scene_verify.json").exists()
+
+
 def test_run_writes_no_sidecar_unless_asked(scene):
     rc, _ = _run(scene)
     assert rc == 0

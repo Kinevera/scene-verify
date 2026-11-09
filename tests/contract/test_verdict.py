@@ -42,7 +42,7 @@ def _verdict(**overrides: Any) -> dict[str, Any]:
         "scene_id": "scene_a",
         "overall_status": "fail",
         "verified_at": "2026-10-17T10:00:00+00:00",
-        "verifier_version": "0.3.0",
+        "verifier_version": "0.4.0",
         "gates": [
             _gate("scene_load"),
             _gate("visual_collision_agreement", "warn", "labeling", None),
@@ -108,7 +108,7 @@ def test_parses_a_full_verdict_into_typed_fields():
     assert verdict.scene_id == "scene_a"
     assert verdict.overall_status == "fail"
     assert verdict.verified_at == "2026-10-17T10:00:00+00:00"
-    assert verdict.verifier_version == "0.3.0"
+    assert verdict.verifier_version == "0.4.0"
     assert verdict.usd_sha256 == USD_SHA256
     assert [gate.gate for gate in verdict.gates] == [
         "scene_load",
@@ -125,17 +125,17 @@ def test_parses_a_full_verdict_into_typed_fields():
     }
 
 
-def test_all_pass_verdict_without_usd_binding():
+def test_a_verdict_without_usd_sha256_is_rejected():
+    # Required since 0.4.0 (scene-verify-0001, amendment of 2026-11-08): a verdict that does
+    # not bind itself to the exact stage bytes it graded cannot be trusted for any stage.
     data = _verdict(
         overall_status="pass",
         gates=[_gate("scene_load"), _gate("static_settle", bucket="physics_instability")],
         bucket_attribution={},
     )
     del data["usd_sha256"]
-    verdict = parse_verdict(data)
-    assert verdict.overall_status == "pass"
-    assert verdict.bucket_attribution == {}
-    assert verdict.usd_sha256 is None
+    with pytest.raises(VerdictError, match="verdict is missing 'usd_sha256'"):
+        parse_verdict(data)
 
 
 def test_warn_verdict():
@@ -337,6 +337,15 @@ REJECTIONS: list[tuple[str, Callable[[dict], None], str]] = [
         "verdict.bucket_attribution must list each gate that did not pass",
     ),
     # usd_sha256
+    ("usd_sha256 missing", _drop("usd_sha256"), "verdict is missing 'usd_sha256'"),
+    ("usd_sha256 empty", _set("usd_sha256", ""), "verdict.usd_sha256 must be a sha256 digest"),
+    (
+        "usd_sha256 not hex",
+        _set("usd_sha256", "g" * 64),
+        "verdict.usd_sha256 must be a sha256 digest",
+    ),
+    ("usd_sha256 long", _set("usd_sha256", "a" * 65), "verdict.usd_sha256 must be a sha256"),
+    ("usd_sha256 a number", _set("usd_sha256", 7), "verdict.usd_sha256 must be a sha256 digest"),
     ("usd_sha256 null", _set("usd_sha256", None), "verdict.usd_sha256 must be a sha256 digest"),
     ("usd_sha256 short", _set("usd_sha256", "ab" * 8), "verdict.usd_sha256 must be a sha256"),
     (

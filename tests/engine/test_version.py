@@ -26,6 +26,9 @@ def test_the_engine_pins_the_contract_at_its_own_version():
 
 def test_a_verdict_reports_the_verifier_version():
     report = sv.SceneVerifyReport.from_gates(
-        scene_id="version", gates=[], verified_at="2026-10-17T00:00:00+00:00"
+        scene_id="version",
+        gates=[],
+        verified_at="2026-10-17T00:00:00+00:00",
+        usd_sha256="ef" * 32,
     )
     assert report.to_verdict_json()["verifier_version"] == version("scene-verify")
