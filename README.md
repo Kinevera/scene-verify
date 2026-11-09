@@ -36,7 +36,8 @@ The overall verdict is the worst result of any check.
 
 ## Status
 
-Version **0.4.0** is tagged. Since 0.4.0 every verdict must carry `usd_sha256`, the SHA-256 of
+Version **0.4.0** is tagged; **0.4.1**, which bounds the memory of the mesh-distance query, is
+built and not yet tagged. Since 0.4.0 every verdict must carry `usd_sha256`, the SHA-256 of
 the exact file the verifier opened (`CHANGELOG.md`).
 
 Built for Isaac Sim 5.1. On 2026-11-08 it also ran on Isaac Sim 6.2.0, in NVIDIA's NGC
@@ -49,11 +50,11 @@ Python 3.11 or later. Both packages install from this repository by tag:
 
 ```
 pip install \
-  "scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/contract" \
-  "scene-verify @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/engine"
+  "scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.4.1#subdirectory=packages/contract" \
+  "scene-verify @ git+https://github.com/Kinevera/scene-verify@v0.4.1#subdirectory=packages/engine"
 ```
 
-Name both packages. The engine pins `scene-verify-contract==0.4.0`, and no package index
+Name both packages. The engine pins `scene-verify-contract==0.4.1`, and no package index
 carries it, so a bare pin could resolve to someone else's package.
 
 Isaac Sim 6.2 already ships numpy, scipy, trimesh and PyYAML, so inside its Python add
@@ -61,8 +62,8 @@ Isaac Sim 6.2 already ships numpy, scipy, trimesh and PyYAML, so inside its Pyth
 
 ```
 /isaac-sim/python.sh -m pip install --no-deps \
-  "scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/contract" \
-  "scene-verify @ git+https://github.com/Kinevera/scene-verify@v0.4.0#subdirectory=packages/engine"
+  "scene-verify-contract @ git+https://github.com/Kinevera/scene-verify@v0.4.1#subdirectory=packages/contract" \
+  "scene-verify @ git+https://github.com/Kinevera/scene-verify@v0.4.1#subdirectory=packages/engine"
 ```
 
 ## Run
