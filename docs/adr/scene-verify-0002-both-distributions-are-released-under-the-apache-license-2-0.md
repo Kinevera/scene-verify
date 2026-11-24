@@ -7,17 +7,16 @@
 
 ## Context
 
-The amendment of 2026-11-08 to scene-verify-0001 made this repository public so that consumers can
-install both distributions from git by tag. No licence was chosen at the time: the README said
-"No license has been chosen yet. Until one is added, all rights are reserved", and both
-`pyproject.toml` files declared `license = { text = "Proprietary" }`. A public repository with no
-licence can be read but not legally reused, which defeats the reason it was made public.
+The amendment of 2026-11-08 to scene-verify-0001 ruled that this repository becomes public, so that
+its consumers can install both distributions from git by tag without a read credential. No licence
+was chosen at the time: the README said "No license has been chosen yet. Until one is added, all
+rights are reserved", and both `pyproject.toml` files declared
+`license = { text = "Proprietary" }`. Anyone outside Kinevera can read a public repository with no
+licence, but cannot legally reuse it.
 
-Kinevera is also preparing a proposal to ARIA's Standards and Benchmarks for Dexterous Robotics
-call (deadline 2026-12-01). That call scores openness and reuse, and the proposal lists this
-repository among Kinevera's open outputs. The maintainer ruled on 2026-11-24 to release it under
-Apache-2.0. The copyright holder is Kinevera Robotics Ltd (Companies House 17437973), checked on
-the Companies House register on 2026-11-24.
+The maintainer ruled on 2026-11-24 to release the repository under Apache-2.0 so that other
+organisations can reuse the verifier. The copyright holder is Kinevera Robotics Ltd (Companies
+House 17437973), checked on the Companies House register on 2026-11-24.
 
 ## Decision
 
@@ -31,16 +30,17 @@ the Companies House register on 2026-11-24.
    distributions name `Kinevera Robotics Ltd` as author.
 4. There is no NOTICE file and no per-file licence header. The repository contains no third-party
    code that requires attribution, and the README and the LICENSE files are the licence statement.
+5. This change merges only after every author of the code it releases has signed an IP assignment
+   to Kinevera Robotics Ltd: the commit authors and the authors of the verifier work moved from
+   RoboEval under scene-verify-0001. The maintainer confirms this on the pull request before
+   approving the merge.
 
 ## Consequences
 
 - Anyone can use, modify and redistribute the contract and the engine, including commercially,
   with a patent grant from each contributor. Consumers can pin a tag without a separate agreement.
-- The licence grant is only as good as Kinevera's title to the code. Code written before the
-  contributors' IP assignments to Kinevera Robotics Ltd are signed is not cleanly Kinevera's, so
-  this change merges only once those assignments cover every author of the code it releases
-  (the commit authors and the authors of the verifier work moved from RoboEval under
-  scene-verify-0001).
+- The licence grant rests on Kinevera Robotics Ltd holding title to the code, which is why
+  decision 5 gates the merge on the authors' IP assignments.
 - The three LICENSE copies can drift apart. Nothing checks them automatically; a change to one is
   a change to all three, made in one commit.
 - Releasing under Apache-2.0 cannot be withdrawn for copies already distributed. A later change of
@@ -55,7 +55,7 @@ the Companies House register on 2026-11-24.
 - **Keep it unlicensed:** keeps every right, but leaves a public repository nobody may reuse and
   contradicts the reason it was made public.
 - **A non-commercial or source-available licence:** protects commercial use, but blocks the
-  industrial adoption the verifier and the ARIA proposal both aim for.
+  industrial adoption the verifier aims for.
 - **NOTICE file and per-file headers:** the Apache appendix suggests them, but they add upkeep to
   every source file without changing the grant, and no third-party attribution needs a NOTICE.
 
