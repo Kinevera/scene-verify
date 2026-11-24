@@ -3,8 +3,9 @@ name = "scene-verify-contract"
 version = "0.4.1"
 description = "The scene_verify/1 verdict contract: its constants, typed structures and validator, standard library only"
 requires-python = ">=3.11"
-license = { text = "Proprietary" }
-authors = [{ name = "Cybernetic" }]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Kinevera Robotics Ltd" }]
 # No dependencies: a consumer such as SceneForge's API pins the contract without the engine's
 # numpy, trimesh or USD (scene-verify-0001).
 dependencies = []

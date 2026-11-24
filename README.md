@@ -116,4 +116,5 @@ make test                     # pytest; no GPU or Isaac Sim needed
 
 ## License
 
-No license has been chosen yet. Until one is added, all rights are reserved.
+Copyright 2026 Kinevera Robotics Ltd. Licensed under the [Apache License, Version 2.0](LICENSE).
+Both distributions, `scene-verify-contract` and `scene-verify`, ship the same licence.
