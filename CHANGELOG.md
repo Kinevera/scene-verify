@@ -7,6 +7,9 @@ rules) has a line here and a record in `docs/adr/` (`AGENTS.md`, binding rule 2)
 
 ## 0.4.1 (unreleased)
 
+- **Licence:** both distributions are released under the Apache License 2.0. Each package
+  carries the licence text and declares `license = "Apache-2.0"` (SPDX); the repository root
+  carries the same text. Before this, no licence was chosen and all rights were reserved.
 - **Engine:** the signed distance behind `visual_collision_agreement` and the mesh-level
   penetration depth finds each point's closest triangle through per-size-class `cKDTree`s of
   triangle centroids, evaluating candidates in fixed-size batches, instead of trimesh's
