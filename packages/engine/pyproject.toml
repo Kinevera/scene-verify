@@ -5,7 +5,7 @@ description = "The scene verifier engine: grades a USD scene's geometry and phys
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-authors = [{ name = "Cybernetic" }]
+authors = [{ name = "Kinevera Robotics Ltd" }]
 # Lower bounds that Isaac Sim 5.1's Python meets (it bundles numpy 1.26.0, trimesh 4.5.1,
 # PyYAML 6.0.2 and scipy 1.15.3). trimesh needs scipy for the convex-hull collision proxy and
 # winding repair; without it the proxy silently falls back to the visual mesh, so scipy is

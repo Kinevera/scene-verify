@@ -24,3 +24,4 @@ condition someone can check. Copy `TEMPLATE.md` to start a record.
 | ADR | Title | Status | Date |
 | --- | --- | --- | --- |
 | [scene-verify-0001](scene-verify-0001-the-verifier-moves-from-roboeval-as-a-contract-and-an-engine-released-under-one-tag.md) | The verifier moves from RoboEval as a contract and an engine released under one tag | Accepted | 2026-10-17 |
+| [scene-verify-0002](scene-verify-0002-both-distributions-are-released-under-the-apache-license-2-0.md) | Both distributions are released under the Apache License 2.0 | Accepted | 2026-11-24 |
